@@ -1,0 +1,7 @@
+import test from 'node:test'; import assert from 'node:assert/strict';
+import { isPlainObject, SvelteXError, toError } from '../dist/index.js';
+test('isPlainObject rejects class instances and accepts null-prototype objects',()=>{ assert.equal(isPlainObject({a:1}),true); assert.equal(isPlainObject(Object.create(null)),true); assert.equal(isPlainObject(new Date()),false); });
+test('SvelteXError preserves code and details',()=>{ const error=new SvelteXError('bad',{code:'BAD',details:{field:'x'}}); assert.equal(error.code,'BAD'); assert.equal(error.details.field,'x'); });
+test('toError normalizes unknown values',()=>{ assert.equal(toError('oops').message,'oops'); });
+test('cloneData rejects prototype-pollution keys without invoking accessors', async()=>{ const {cloneData}=await import('../dist/index.js'); const polluted=JSON.parse('{"__proto__":{"admin":true}}'); assert.throws(()=>cloneData(polluted),{code:'DATA_UNSAFE_KEY'}); let called=false; const accessor=Object.defineProperty({},'secret',{enumerable:true,get(){called=true;return 1;}}); assert.throws(()=>cloneData(accessor),{code:'DATA_ACCESSOR'}); assert.equal(called,false); });
+test('cloneData rejects cycles, class instances and non-finite numbers', async()=>{ const {cloneData}=await import('../dist/index.js'); const cyclic={}; cyclic.self=cyclic; assert.throws(()=>cloneData(cyclic),{code:'DATA_CYCLE'}); assert.throws(()=>cloneData(new Date()),{code:'DATA_UNSUPPORTED_OBJECT'}); assert.throws(()=>cloneData(Infinity),{code:'DATA_INVALID_NUMBER'}); });

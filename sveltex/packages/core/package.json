@@ -1,0 +1,46 @@
+{
+  "name": "@sveltexjs/core",
+  "version": "0.1.0",
+  "description": "Framework-independent application engine for SvelteX",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test",
+    "test:types": "tsc -p tests/tsconfig.json --noEmit",
+    "check": "npm run typecheck && npm run test:coverage && npm run test:types",
+    "test:unit": "npm run build && node --test tests/unit/core.test.mjs tests/unit/config.test.mjs tests/unit/modules.test.mjs tests/unit/container.test.mjs tests/unit/application.test.mjs",
+    "test:stress": "npm run build && node --test tests/stress/core-stress.test.mjs",
+    "test:security": "npm run build && node --test tests/security/config-security.test.mjs",
+    "test:compatibility": "npm run build && node --test tests/compatibility/runtime.test.mjs",
+    "test:coverage": "npm run build && node --experimental-test-coverage --test"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "sveltex",
+    "application-framework",
+    "dependency-injection",
+    "lifecycle"
+  ]
+}

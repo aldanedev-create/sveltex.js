@@ -1,0 +1,1 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { AuthService } from '../../dist/index.js'; test('requires an explicit dummy password hash',()=>{ assert.throws(()=>new AuthService({}, {}, {}, {dummyPasswordHash:''}),{name:'AuthConfigurationError'}); });

@@ -1,0 +1,38 @@
+{
+  "name": "@sveltexjs/cache",
+  "version": "0.1.0",
+  "description": "Driver-neutral cache contracts and a bounded in-memory cache implementation",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test && tsc -p tests/types/tsconfig.json",
+    "test:unit": "npm test",
+    "test:security": "npm run build && node --test tests/security/*.test.mjs",
+    "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
+    "test:coverage": "npm run build && node --experimental-test-coverage --test"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {}
+}

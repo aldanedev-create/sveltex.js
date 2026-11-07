@@ -1,0 +1,1 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { MemoryCache } from '../../dist/index.js'; test('rejects unbounded and invalid cache inputs',async()=>{ assert.throws(()=>new MemoryCache({maxEntries:-1})); const cache=new MemoryCache(); await assert.rejects(()=>cache.set('',1)); await assert.rejects(()=>cache.set('k',1,{ttlMs:Infinity})); });

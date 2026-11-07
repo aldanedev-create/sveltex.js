@@ -1,0 +1,50 @@
+{
+  "name": "@sveltex/sveltekit",
+  "version": "0.1.0",
+  "description": "SvelteKit adapter for the SvelteX application framework",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @sveltex/core build && npm run build && node --test",
+    "test:unit": "pnpm --filter @sveltex/core build && npm run build && node --test tests/unit/*.test.mjs",
+    "test:security": "pnpm --filter @sveltex/core build && npm run build && node --test tests/security/*.test.mjs",
+    "test:stress": "pnpm --filter @sveltex/core build && npm run build && node --test tests/stress/*.test.mjs",
+    "test:types": "tsc -p tests/types/tsconfig.json",
+    "test:lifecycle": "pnpm --filter @sveltex/core build && npm run build && node --test tests/lifecycle/*.test.mjs"
+  },
+  "dependencies": {
+    "@sveltex/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@sveltejs/kit": ">=2.0.0"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "sveltex",
+    "sveltekit",
+    "adapter",
+    "dependency-injection"
+  ]
+}

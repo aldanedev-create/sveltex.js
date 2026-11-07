@@ -1,0 +1,10 @@
+import test from 'node:test'; import assert from 'node:assert/strict';
+import { safeValidate, validate, ValidationError } from '../dist/index.js';
+const schema={'~standard':{version:1,vendor:'test',validate: async value=>typeof value==='string'?value:{issues:[{message:'Expected string',path:['name']}]}}};
+test('safeValidate returns parsed output',async()=>{ assert.deepEqual(await safeValidate(schema,'ok'),{success:true,data:'ok'}); });
+test('safeValidate normalizes issues',async()=>{ const result=await safeValidate(schema,42); assert.equal(result.success,false); if(!result.success) assert.deepEqual(result.issues[0]?.path,['name']); });
+test('validate throws ValidationError for invalid input',async()=>{ await assert.rejects(()=>validate(schema,42),ValidationError); });
+test('safeValidate rejects malformed schema descriptors',async()=>{ await assert.rejects(()=>safeValidate({'~standard':{version:2,vendor:'x',validate:()=>true}},'x'),TypeError); });
+test('safeValidate normalizes object path segments and freezes issues',async()=>{ const result=await safeValidate({'~standard':{version:1,vendor:'x',validate:()=>({issues:[{message:'bad',path:[{key:'user'},0]}]})}},{}); assert.equal(result.success,false); if(!result.success){assert.deepEqual(result.issues[0]?.path,['user',0]);assert.equal(Object.isFrozen(result.issues),true);} });
+test('safeValidate wraps validator execution errors',async()=>{ await assert.rejects(()=>safeValidate({'~standard':{version:1,vendor:'x',validate:()=>{throw new Error('boom');}}},{}),{name:'ValidationExecutionError'}); });
+test('ValidationError rejects malformed issue structures',()=>{ assert.throws(()=>new ValidationError([{message:42}]),TypeError); });
