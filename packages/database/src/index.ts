@@ -120,3 +120,13 @@ function normalizeResult<Row>(result: QueryResult<Row>): QueryResult<Row> {
   return Object.freeze({ rows: Object.freeze([...result.rows]), rowCount: result.rowCount });
 }
 function assertNotAborted(signal?: AbortSignal): void { if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'); }
+
+// ---------------------------------------------------------------------------
+// ORM / query-builder integration layer (Phase 1 of the completion plan).
+// These exports are dependency-free: no ORM package is imported from the main
+// entry point. Built-in ORM adapters live behind their own subpath exports and
+// are only loaded — and only require their optional peer — when imported.
+// ---------------------------------------------------------------------------
+export * from './contracts/index.js';
+export * from './core/index.js';
+export * from './testing/index.js';

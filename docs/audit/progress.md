@@ -99,8 +99,9 @@
 - [x] **Database**: Implement MySQL adapter (via `mysql2`) — ✅ `MysqlAdapter` (`mysql2/promise` pool), real integration tests
 - [x] **Database**: Implement migration management — ✅ `MigrationRunner` with checksums, ordered prefix validation, three dialects
 - [x] **Database**: Implement connection pooling — ✅ shared `PoolConfig` + real driver pools
-- [ ] **Database**: Add Drizzle ORM integration path — not claimed (no ORM)
-- [ ] **Database**: Add Prisma integration path — not claimed (no ORM)
+- [x] **Database**: Drizzle ORM integration — ✅ delivered in completion plan Phase 1 as an optional-peer adapter behind `@sveltex/database/adapters/drizzle` (real PostgreSQL integration tests)
+- [x] **Database**: Kysely query-builder integration + BYO ORM contract — ✅ delivered in Phase 1 (`defineDatabaseAdapter`, `runAdapterConformance`, real PostgreSQL tests)
+- [ ] **Database**: Built-in Prisma / MikroORM / TypeORM adapters — BYO ORM only; not claimed (custom adapters supported via `defineDatabaseAdapter`)
 - [x] **Database**: Real integration tests for PostgreSQL/MySQL — ✅ 24 integration tests against real servers
 - [x] **Auth**: Implement Argon2id password hashing (`@node-rs/argon2`) — ✅ done, 13 real integration tests
 - [ ] **Auth**: Implement password reset flow
@@ -171,11 +172,11 @@
 
 ## Known limitations
 
-1. Database: ORM integrations (Drizzle/Prisma), cross-process migration locking, and connection retry/failover are not implemented. PostgreSQL/MySQL adapters, migrations, and pooling are now shipped with real integration tests.
+1. Database: cross-process migration locking and connection retry/failover are not implemented. PostgreSQL/MySQL adapters, migrations, and pooling ship with real integration tests; built-in ORM integrations (Drizzle/Kysely) and BYO ORM support were delivered in Phase 1 (built-in Prisma/MikroORM/TypeORM remain BYO-only).
 2. Auth: MFA, password reset, email verification, OAuth/OIDC, authorization policy, and cookie security not yet implemented (Argon2id hashing is done).
 3. Cache: Redis adapter is done; tags and advanced invalidation are deferred.
 4. Session: Redis shared store is done (atomic Lua scripts); database-backed store, cookie transport, and CSRF integration are still pending.
-5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations and pooling are now delivered; remaining Stage 3 gaps are an ORM path, session cookie transport/CSRF, and package-level auth policies.
+5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations, pooling, and ORM integrations (Drizzle/Kysely + BYO) are now delivered; remaining Stage 3 gaps are session cookie transport/CSRF and package-level auth policies.
 6. Stage 4 adapters are explicitly process-local: `InProcessTransport` is not distributed, `InMemoryJobQueue` is not durable, `LocalStorageDriver` is local disk only, `TestTransport` never sends real mail, and `@sveltex/testing` fakes are in-memory only. Each README documents this; no untested provider is claimed.
 7. CI pipeline minimal — no OS/Node matrix, no pack verification.
 8. Stage 5 CLI: no consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages (workspace packages are unpublished). Generated manifests/config/hooks and template rendering are verified; the registry round-trip is CI work.
@@ -189,7 +190,7 @@
 
 1. **CI / release:** Node/OS version matrix, fixture build job, `npm pack` + clean consumer install, coverage reporting, and publishing the workspace packages to a registry. Partially delivered in Session 7: CI now uses `--frozen-lockfile`, provisions PostgreSQL/MySQL/Redis services, and runs `pnpm check` + `pnpm test:security`; the matrix, coverage, pack verification and publish remain open.
 2. **Consumer-side verification (blocked on publish):** install → typecheck → build a CLI-generated app against published `@sveltex/*` packages. This is the one Stage 5 exit criterion not yet claimed.
-3. **Remaining hardening (optional, non-blocking):** an ORM path, cross-process migration locking, session cookie transport + CSRF, package-level auth policies; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised.
+3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, session cookie transport + CSRF, package-level auth policies, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is now the active roadmap; its Phase 0 audit and Phase 1 database work are delivered (see Session 8).
 
 Discipline reminder carried from the specification: ecosystem first, CLI last; no fake providers; no claiming untested support; never skip tests to force CI green.
 
@@ -207,3 +208,25 @@ Follow-up after all five stages were complete, per the "Next recommended action 
 - Updated CI to provision PostgreSQL 16, MySQL 8.0 and Redis 7 services, use `--frozen-lockfile`, and run both `pnpm check` and `pnpm test:security` so integration tests run for real rather than being skipped.
 - Verified integrations against real servers (CRUD, injection, rollback, savepoints, concurrency, migrations, tamper detection) and re-ran the full monorepo: **488/488 runtime tests, 77/77 security tests, 16/16 type-test projects, 0 failures, 0 skipped**.
 - Added security findings SEC-027 – SEC-030 and synced all audit/specification documents.
+
+---
+
+## Session 8 — Existing Package Completion Plan: Phase 0 + Phase 1 (2026-11-08)
+
+A new user-supplied [Existing Package Completion Plan](../completion-plan.md) is now the active
+roadmap. Core rule: **do not add new packages until the existing packages have completed their
+required implementations, tests, documentation, and release audits.** 13 phases (0–12); work is
+done in batches, each with real integration tests, documentation sync, XERJ verification, a full
+`pnpm check` + `pnpm test:security` run, and a commit/push at milestones.
+
+- Pushed the pending database-hardening commit (`bd0d0be..3309905  main -> main`) once `workflow`
+  scope became available; remote and local HEAD matched, working tree clean, no credential persisted.
+- Restarted Redis / PostgreSQL 16 / MySQL 8.0 / XERJ after sandbox sleep; probed npm for real
+  ORM/provider versions before installing anything.
+- **Phase 0 (deliverable [`docs/completion/phase-0-audit.md`](../completion/phase-0-audit.md)):** audited all 15 existing packages from real code — source/test counts, public exports, dependencies, optional peers, engines, strict flags, README "not claimed" statements, and runtime test totals. Confirmed no TODO/stub/placeholder implementations and no new package was created. Documented the plan/repo tensions (CLI built last already; `MigrationRunner` already ships) and the `better-sqlite3` sandbox segfault that dictates real-PostgreSQL ORM tests.
+- **Phase 1 (report [`docs/completion/phase-1-database.md`](../completion/phase-1-database.md)):** extended only `@sveltex/database` with an additive ORM integration layer — BYO ORM contract (`defineDatabaseAdapter`, capability validation, stable errors), foundation (`configFromEnv`/`redactConfig`, `AdapterRegistry`, `createConnection`, `ConnectionManager`), optional-peer built-in adapters `createDrizzleAdapter` / `createKyselyAdapter`, shared `runAdapterConformance`, subpath exports, and a runnable custom-adapter example. Native ORM clients and ORM-native migrators are preserved; `MigrationRunner` stays a raw-SQL utility.
+- Added real PostgreSQL 16 integration tests for Drizzle, Kysely and the BYO adapter; new security suite (`adapter-security.test.mjs`), type tests, README/CHANGELOG, and `neverBuiltDependencies: [better-sqlite3]` so the optional native peer is never compiled.
+- **Verification:** `@sveltex/database` **116/116** runtime + **16/16** security; full monorepo `pnpm check` → **536/536** runtime (0 failures, 0 skipped, 16 packages), `pnpm test:security` → **86/86**, `pnpm test:types` → 16/16; `pnpm install --frozen-lockfile --offline` clean; `npm pack --dry-run` includes all new subpaths with an ORM-free main entry; optional-dependency isolation verified.
+- Added security findings SEC-031 – SEC-034 (ORM adapter capability integrity, error/health redaction, passive env config, optional-peer isolation) and synced all `docs/audit/*`, `docs/specification.md`, `docs/manifest.json`, `docs/roadmap.md`, `docs/packages/README.md`, and the root `README.md` to the 536/86 baseline. Manifest now lists the three completion docs (36 documents).
+
+**Discipline carried forward:** no fake providers; no claiming untested support; never skip tests to force CI green; XERJ used for repository research. Phases 2–12 remain.

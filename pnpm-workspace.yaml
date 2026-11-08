@@ -2,3 +2,10 @@ packages:
   - "packages/*"
   - "packages/sveltekit/tests/fixtures/*"
   - "examples/*"
+
+# better-sqlite3 is only pulled in as an *optional peer* of drizzle-orm.
+# SvelteX never imports or instantiates it (SQLite uses the built-in
+# node:sqlite; ORM integration tests use real PostgreSQL via `pg`). Skipping
+# its native build avoids an unnecessary toolchain dependency in CI/consumers.
+neverBuiltDependencies:
+  - better-sqlite3

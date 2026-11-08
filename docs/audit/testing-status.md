@@ -13,7 +13,7 @@
 | `@sveltex/shared` | 6 | 1 | ✅ | — | — | 7 | All pass |
 | `@sveltex/config` | 8 | 1 | ✅ | — | — | 9 | All pass |
 | `@sveltex/sveltekit` | 35 | 5 | ✅ | ✅ | ✅ | 40+ | All pass |
-| `@sveltex/database` | 68 | 7 | ✅ | — | ✅ SQLite + real PG/MySQL | 75 | All pass |
+| `@sveltex/database` | 116 | 16 | ✅ | — | ✅ SQLite + real PG/MySQL + real Drizzle/Kysely PG | 132 | All pass |
 | `@sveltex/validation` | 8 | 1 | ✅ | — | — | 9 | All pass |
 | `@sveltex/auth` | 29 | 1 | ✅ | — | ✅ Argon2id | 30 | All pass |
 | `@sveltex/cache` | 24 | 1 | ✅ | — | ✅ Redis | 25 | All pass |
@@ -25,13 +25,13 @@
 | `@sveltex/mail` | 17 | 9 | ✅ | — | ✅ Test transport | 26 | All pass |
 | `@sveltex/testing` | 20 | 12 | ✅ | — | ✅ Real core DI | 32 | All pass |
 | `sveltex` (CLI) | 48 | 9 | ✅ | — | ✅ Real fs + recorder runner | 57 | All pass |
-| **Total** | **488** | **77** | **16/16** | **2** | **Partial** | **565+** | **All pass** |
+| **Total** | **536** | **86** | **16/16** | **2** | **Partial** | **622+** | **All pass** |
 
 ---
 
 ## Test infrastructure
 
-> **Counting note (updated 2026-11-08):** `488` is the measured total of `pnpm -r test` (the `pnpm check` gate): 431 Stage 1–4 + 57 Stage 5 CLI, with the +38 coming from `@sveltex/database` production hardening. Stage 4 packages and the CLI include their `tests/security/*.test.mjs` files inside the package `test` script, so the CLI's 9 security cases are part of that 488; Stage 1–3 packages run security cases only through the separate `test:security` gate. `77` is the measured total of the standalone `pnpm test:security` chain (23 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI; the database package grew from 1 to 7). These are two distinct gates, not an additive total.
+> **Counting note (updated 2026-11-08, Phase 1):** `536` is the measured total of `pnpm -r test` (the `pnpm check` gate): 479 Stage 1–4 + 57 Stage 5 CLI, with the +48 over the database-hardening baseline coming from `@sveltex/database` Phase 1 (68 → 116 runtime tests). Stage 4 packages and the CLI include their `tests/security/*.test.mjs` files inside the package `test` script, so the CLI's 9 security cases are part of that 536; Stage 1–3 packages run security cases only through the separate `test:security` gate. `86` is the measured total of the standalone `pnpm test:security` chain (32 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI; the database package grew 7 → 16 in Phase 1). These are two distinct gates, not an additive total.
 
 ### Runner
 
@@ -99,6 +99,8 @@ Each package has `tests/types/public-api.test.ts` verifying:
 | SvelteKit fixture build | ✅ Real SvelteKit app | ✅ Passes |
 | SvelteKit fixture typecheck | ✅ svelte-check | ✅ Passes |
 | Database queries | ✅ `node:sqlite` (SQLite) | ✅ 14 integration tests pass |
+| Database pooled adapters | ✅ real PG 16 / MySQL 8.0 servers | ✅ 24 integration tests pass (CRUD, injection, rollback, savepoints, concurrency, migrations) |
+| Database ORM integrations | ✅ real PG 16 server (`pg`) | ✅ Drizzle + Kysely + BYO custom adapter integration tests pass (commit/rollback, conformance, native client) |
 | Auth password hashing | ✅ `@node-rs/argon2` (Argon2id) | ✅ 13 integration tests pass |
 | Cache distributed | ✅ `ioredis` (Redis 7) | ✅ 17 integration tests pass |
 | Session shared store | ✅ `ioredis` (Redis 7) + Lua atomic scripts | ✅ 20 integration tests pass |
@@ -115,7 +117,7 @@ Each package has `tests/types/public-api.test.ts` verifying:
 
 ## Known testing gaps
 
-1. ~~**No PostgreSQL/MySQL integration tests**~~ — resolved: 24 integration tests run against real PostgreSQL 16 and MySQL 8.0 servers (CI provisions both). An ORM path and cross-process migration locking remain out of scope.
+1. ~~**No PostgreSQL/MySQL integration tests**~~ — resolved: 24 integration tests run against real PostgreSQL 16 and MySQL 8.0 servers (CI provisions both). An ORM integration layer (Drizzle/Kysely + BYO) with real PostgreSQL tests was delivered in Phase 1; a cross-process migration lock, connection retry/failover, and built-in Prisma/MikroORM/TypeORM adapters remain out of scope.
 2. **No session database-backed store** — Redis-backed store is implemented and tested; a SQL-backed store is still pending. Cookie transport and CSRF remain out of scope for the `session` package (reference-app wiring is now delivered as an application-level concern).
 3. ~~**No reference application tests**~~ — Resolved: 18 integration tests (in-process + live Redis) cover the full assembly. The Redis suite self-skips when no server is reachable; it never substitutes a fake.
 4. **No `npm pack` + clean installation tests in CI** — Local verification done, CI not configured.

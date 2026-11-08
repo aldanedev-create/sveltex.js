@@ -39,6 +39,10 @@
 | SEC-028 | Info | Migration ledger identifiers and checksums | Ledger table names are restricted to simple SQL identifiers; injection-shaped names throw. Every migration is SHA-256 checksummed over its full SQL body, and already-applied migrations must be an unchanged prefix, so tampering or reordering is rejected. Unknown dialects throw instead of being guessed. | **Secure** |
 | SEC-029 | Info | Transaction connection isolation | Each top-level transaction acquires a dedicated pooled connection; concurrent transactions are isolated (verified against real PostgreSQL/MySQL). Nested transactions use `AsyncLocalStorage` + `SAVEPOINT` on the same connection; leaked executors are rejected after settle, and failures roll back and release the connection. | **Secure** |
 | SEC-030 | Low (fixed) | SQLite write `rowCount` was misleading | Plain `INSERT`/`UPDATE`/`DELETE` reported `rowCount: 0` (only `RETURNING` produced a count), so callers could mistake a successful write for a no-op. Fixed with `total_changes()` measured around each statement; covered by regression tests. | **Fixed** |
+| SEC-031 | Info | ORM adapter capability integrity | `defineDatabaseAdapter` rejects forged capabilities declared without an implementation, unknown capability keys, and non-boolean values at definition time; injection-shaped / overlong / uppercase / empty adapter names are rejected; the registry refuses malformed adapters and duplicate names. Undeclared capabilities cannot be invoked (`UnsupportedCapabilityError`). | **Secure** |
+| SEC-032 | Info | ORM adapter error and health redaction | `connect`/`healthCheck`/conformance failures are wrapped as `DatabaseAdapterError` with a fixed message — connection strings, passwords and tokens from driver errors never reach callers, health reports, or `runAdapterConformance` output (which substitutes `[redacted]`). | **Secure** |
+| SEC-033 | Info | Passive environment configuration | `configFromEnv` collects values verbatim but never evaluates or executes them; the resulting config is frozen. `redactConfig` masks password/token fields while leaving non-secret fields readable. No env value is logged by default. | **Secure** |
+| SEC-034 | Info | Optional-peer isolation (no silent fake) | The main entry and `contracts`/`core`/`testing` subpaths import no ORM; built-in Drizzle/Kysely adapters require their declared optional peer and fail loudly (`ERR_MODULE_NOT_FOUND`) when it is absent. Verified by an isolation test with both ORMs removed. No fallback or fake adapter is substituted. | **Secure** |
 
 ---
 
@@ -170,10 +174,39 @@
   Concurrent failing transactions do not leak changes, and executors are invalidated on settle.
 - **Honest row counts (SEC-030).** Plain writes now report affected rows rather than `0`, so callers
   cannot silently misread a successful write as a no-op.
-- **Limitations.** No ORM, no automatic dialect detection, no cross-process migration lock, no
-  retry/failover. MySQL DDL implicitly commits, so DDL-bearing migrations are not atomic there.
+- **Limitations (at the Session 7 hardening pass).** No ORM integration layer at that point (added in completion-plan Phase 1, see SEC-031 – SEC-034 above), no automatic dialect detection, no cross-process migration lock, no retry/failover. MySQL DDL implicitly commits, so DDL-bearing migrations are not atomic there.
   `pg` and `mysql2` are regular dependencies even for SQLite-only users. TLS is configured
   explicitly by the caller; the adapters invent no transport defaults.
+
+---
+
+### Completion-plan Phase 1 — ORM adapter security review (SEC-031 – SEC-034)
+
+**Status: Secure (with documented limitations)**
+
+Phase 1 added an additive ORM integration layer to `@sveltex/database`. Its dedicated security
+suite is `packages/database/tests/security/adapter-security.test.mjs` (8 of the 16 database
+security cases). The layer never constructs SQL from user input (ORM clients are supplied by the
+caller and preserved untouched), so SQL injection remains the ORM's own responsibility.
+
+- **Capability integrity (SEC-031).** A definition cannot claim a capability it does not
+  implement; unknown keys and non-boolean values are refused; adapter names are validated against
+  injection shapes and length/case rules; duplicate registrations throw. `createConnection`
+  refuses to invoke an undeclared transaction capability.
+- **Error/health redaction (SEC-032).** Driver-provided error text (which may contain a full
+  connection URI, password or token) is never propagated. Wrapped errors use fixed messages,
+  health reports use a fixed failure string, and the shared conformance suite redacts setup
+  failures before returning its report.
+- **Passive config (SEC-033).** `configFromEnv` reads named variables into a frozen object; it
+  evaluates nothing. `redactConfig` masks secret-shaped keys for any logging the application
+  chooses to do.
+- **Optional-peer isolation (SEC-034).** There is no silent degraded mode: if an ORM peer is
+  missing, importing its subpath fails with `ERR_MODULE_NOT_FOUND` rather than substituting a
+  fake adapter. The main entry stays ORM-free.
+
+- **Limitations.** Built-in ORM adapters declare single-level transactions (no savepoints);
+  ORM-side SQLite/MySQL integration is user-configurable but not separately tested; third-party
+  ORM clients are trusted code supplied by the caller. These are documented, not hidden.
 
 ---
 

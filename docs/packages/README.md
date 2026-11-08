@@ -8,7 +8,7 @@ SvelteX is split into independently installable packages. Build the application 
 | 1 | `@sveltex/shared` | Production-ready — data utilities, errors, strict input tests |
 | 1 | `@sveltex/config` | Production-ready — immutable config, safe merge, validation |
 | 2 | `@sveltex/sveltekit` | Production-ready — 35 tests; real SvelteKit fixture builds and type-checks |
-| 3 | `@sveltex/database` | Driver contract + real `SqliteAdapter` (`node:sqlite`); 30 tests (14 integration) |
+| 3 | `@sveltex/database` | Driver contract + real `SqliteAdapter`/`PostgresAdapter`/`MysqlAdapter`, `MigrationRunner`, `PoolConfig`, and optional ORM integrations (Drizzle/Kysely + BYO); 116 tests |
 | 3 | `@sveltex/validation` | Standard Schema v1 execution and issue normalization; 8 tests |
 | 3 | `@sveltex/auth` | Credential orchestration + real `Argon2Hasher` (Argon2id); 29 tests (13 integration) |
 | 3 | `@sveltex/cache` | Bounded memory LRU/TTL + real `RedisCache` (`ioredis`); 24 tests (17 integration) |
@@ -22,6 +22,6 @@ SvelteX is split into independently installable packages. Build the application 
 
 Do not add placeholder packages for future stages. Each package must have a useful implementation, stable public contracts, strict type checks, public API type tests, unit/integration/security tests, package export checks, and documentation before it is considered complete.
 
-All five stages are now implemented and verified (488 runtime tests, 77 security tests, 16 type-test projects). The CLI was deliberately built last; it consumes the stable package contracts and lists only real shipped integrations. `@sveltex/database` ships real PostgreSQL and MySQL adapters plus migrations and pooling. No external provider adapter (SMTP/S3/WebSocket/hosted Redis) is shipped or advertised.
+All five stages are now implemented and verified (536 runtime tests, 86 security tests, 16 type-test projects). The CLI was deliberately built last; it consumes the stable package contracts and lists only real shipped integrations. `@sveltex/database` ships real PostgreSQL and MySQL adapters plus migrations, pooling, and optional ORM integrations (Drizzle/Kysely + BYO ORM); built-in Prisma/MikroORM/TypeORM adapters are not claimed. No external provider adapter (SMTP/S3/WebSocket/hosted Redis) is shipped or advertised.
 
 See [`../specification.md`](../specification.md) for package responsibilities, API rules, acceptance criteria, and the complete CLI specification.

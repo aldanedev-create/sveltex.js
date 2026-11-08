@@ -11,7 +11,7 @@
 
 SvelteX is a modular SvelteKit-native application framework with a DI container, module system, lifecycle management, and progressively built backend packages. The repository has a **solid architectural foundation** in `@sveltex/core` and `@sveltex/sveltekit`, with initial implementations for all Stage 3 packages.
 
-However, the repository had a **P0 blocking defect** that prevented `pnpm install` from succeeding, plus fixture build/typecheck failures. These have been **fixed in this audit session**. The codebase is now in a **buildable and testable state**: **all five stages are implemented and verified** with 488 runtime tests, 77 security tests, and 16 type-test projects passing under `pnpm check`, with the SvelteKit fixture building successfully. The Stage 5 `sveltex` CLI was built strictly **last**, after the Stage 1–4 package APIs and templates were stable and verified.
+However, the repository had a **P0 blocking defect** that prevented `pnpm install` from succeeding, plus fixture build/typecheck failures. These have been **fixed in this audit session**. The codebase is now in a **buildable and testable state**: **all five stages are implemented and verified** with 536 runtime tests, 86 security tests, and 16 type-test projects passing under `pnpm check`, with the SvelteKit fixture building successfully. The Stage 5 `sveltex` CLI was built strictly **last**, after the Stage 1–4 package APIs and templates were stable and verified.
 
 ### Critical findings (fixed)
 
@@ -68,7 +68,7 @@ sveltex/
 ```
 
 **Package count:** 15 implemented packages + 1 SvelteKit fixture app + 1 reference application.  
-**Runtime tests:** 488 passing (Stage 1–3: 300; Stage 4: 131; Stage 5 CLI: 57), 77 security tests, 16 type-test projects.  
+**Runtime tests:** 536 passing (Stage 1–3: 348; Stage 4: 131; Stage 5 CLI: 57), 86 security tests, 16 type-test projects.  
 **Stage 4 packages** (realtime, jobs, storage, mail, testing): **delivered**. **Stage 5** (`sveltex` CLI): **delivered, built last** — 17 commands, six official templates, 57 tests, `npm pack --dry-run` verified.
 
 ---
@@ -182,7 +182,7 @@ Comprehensive across all packages:
 | `@sveltex/shared` | Yes | Yes (6) | N/A | **Yes** | Utility functions, well-tested |
 | `@sveltex/config` | Yes | Yes (8) | N/A | **Yes** | Config composition/validation |
 | `@sveltex/sveltekit` | Yes | Yes (35) | Yes (fixture builds) | **Yes** | Request isolation, hook composition |
-| `@sveltex/database` | Yes | Yes (68) | ✅ SQLite, PostgreSQL 16, MySQL 8.0 (real servers) | **Complete** | ORM path, cross-process migration lock, retry/failover not claimed |
+| `@sveltex/database` | Yes | Yes (116) | ✅ SQLite, PostgreSQL 16, MySQL 8.0 (real servers) + real ORM (Drizzle/Kysely/BYO) PG tests | **Complete** | Built-in ORM integrations + BYO shipped; cross-process migration lock, retry/failover, built-in Prisma/MikroORM/TypeORM not claimed |
 | `@sveltex/validation` | Yes | Yes (8) | N/A | **Yes** | Standard Schema execution |
 | `@sveltex/auth` | Yes | Yes (29) | ✅ Argon2id (real), 13 integration tests | **Partial** | Reset/verification/OAuth/policies pending |
 | `@sveltex/cache` | Yes | Yes (24) | ✅ Redis (real), 17 integration tests | **Partial** | Tags/advanced invalidation pending |
@@ -203,6 +203,6 @@ Comprehensive across all packages:
 2. **CI pipeline improvement**: Add security tests, stress tests, fixture build, and `npm pack` verification to CI workflow.
 3. **Stage 1 finalization**: Add CHANGELOG.md to shared/config if missing. Verify `npm pack` produces correct file lists.
 4. **Stage 2 finalization**: CI verification of fixture build with installed workspace dependencies (now passing locally).
-5. **✅ Stage 3 enhancement (done in sessions 2–4)**: real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (`@node-rs/argon2`), `RedisCache` and `RedisSessionStore` (`ioredis` + Lua), each with real integration tests; plus `examples/reference-app/` wiring all five packages (18 integration tests). PostgreSQL/MySQL, migrations and pooling were delivered in the database production-hardening pass (Session 7); cookie transport, CSRF and an ORM path remain optional hardening.
+5. **✅ Stage 3 enhancement (done in sessions 2–4)**: real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (`@node-rs/argon2`), `RedisCache` and `RedisSessionStore` (`ioredis` + Lua), each with real integration tests; plus `examples/reference-app/` wiring all five packages (18 integration tests). PostgreSQL/MySQL, migrations and pooling were delivered in the database production-hardening pass (Session 7); built-in ORM integrations (Drizzle/Kysely) and BYO ORM were delivered in the completion plan's Phase 1 (Session 8); cookie transport and CSRF remain optional hardening.
 6. **✅ Stage 4 (done, session 5):** `realtime`, `jobs`, `storage`, `mail`, `testing` — all five delivered with real process-local implementations, 131 runtime + 45 security tests, type tests, READMEs documenting deployment limits, and no untested provider claims.
 7. **✅ Stage 5 (done, session 6):** the `sveltex` CLI — built strictly last, after all package APIs and templates were stable and verified. 17 commands, six official templates, 57 tests, documented safety model and limitations.

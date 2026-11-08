@@ -13,7 +13,7 @@
 | `@sveltex/shared` | ✅ Pass | ✅ Pass | ✅ 6/6 | ✅ 1/1 | ✅ Pass | **Stage 1 — Ready** |
 | `@sveltex/config` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 1 — Ready** |
 | `@sveltex/sveltekit` | ✅ Pass | ✅ Pass | ✅ 35/35 | ✅ 5/5 | ✅ Pass | **Stage 2 — Ready** |
-| `@sveltex/database` | ✅ Pass | ✅ Pass | ✅ 68/68 | ✅ 7/7 | ✅ Pass | **Stage 3 — Complete (SQLite/PostgreSQL/MySQL + migrations + pooling)** |
+| `@sveltex/database` | ✅ Pass | ✅ Pass | ✅ 116/116 | ✅ 16/16 | ✅ Pass | **Stage 3 — Complete (SQLite/PostgreSQL/MySQL + migrations + pooling + ORM/BYO)** |
 | `@sveltex/validation` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 3 — Ready** |
 | `@sveltex/auth` | ✅ Pass | ✅ Pass | ✅ 29/29 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Argon2id done)** |
 | `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
@@ -26,7 +26,7 @@
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **488/488** | **77/77** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **536/536** | **86/86** | **16/16** | **All pass** |
 
 ---
 
@@ -74,15 +74,17 @@
 
 ### Stage 3 — Essential backend packages
 
-#### `@sveltex/database` — ✅ Complete (SQLite, PostgreSQL, MySQL, migrations, pooling)
+#### `@sveltex/database` — ✅ Complete (raw SQL + ORM integrations)
 
-- **Source:** `index.ts` (101 lines) + `sqlite.ts` (real `node:sqlite` adapter).
-- **Public API:** `Database`, `DatabaseDriver`, `DatabaseExecutor`, `QueryResult`, `QueryOptions`, `QueryValue`, `PoolConfig`, `DatabaseState`, `DatabaseError`, `DatabaseLifecycleError`, `DatabaseDriverError`, `SqliteAdapter`, `PostgresAdapter`, `MysqlAdapter`, `MigrationRunner`, `MIGRATION_DIALECTS`, `createMigrationDialect`, `migrationChecksum`.
-- **Features:** Lifecycle state machine. Operation tracking with drain. Transaction-scoped executor (savepoints for nested). AbortSignal support. SQL/parameter validation. Frozen normalized results.
-- **Adapters:** `SqliteAdapter` uses the built-in `node:sqlite` `DatabaseSync` (no native compilation step). Handles `bigint`, `Date`, `boolean`, `Uint8Array` parameter conversion.
-- **Tests:** 30 tests — 16 unit/security + 14 real SQLite integration tests (`tests/sqlite-integration.test.mjs`), including transactions, rollbacks, savepoints, bigint/Date/blob parameters, readonly mode, and WAL.
-- **Delivered:** Real `PostgresAdapter` (`pg.Pool`) and `MysqlAdapter` (`mysql2` pool) with dedicated transaction connections and nested savepoints; `MigrationRunner` with checksums and three dialects; shared `PoolConfig`; corrected write `rowCount`. **Still missing:** ORM (Drizzle/Prisma) path, cross-process migration lock, connection retry/failover. **Engines:** `>=22.5.0` (`node:sqlite`).
-- **Limitation:** Real integration verified only for SQLite (in-process, no external service).
+- **Source:** raw-SQL layer (`index.ts`, `sqlite.ts`, `postgres.ts`, `mysql.ts`, `pool.ts`, `migrations.ts`) plus the additive ORM integration layer (`contracts/`, `core/`, `testing/`, `adapters/`).
+- **Public API (raw SQL):** `Database`, `DatabaseDriver`, `DatabaseExecutor`, `QueryResult`, `QueryOptions`, `QueryValue`, `PoolConfig`, `DatabaseState`, `DatabaseError`, `DatabaseLifecycleError`, `DatabaseDriverError`, `SqliteAdapter`, `PostgresAdapter`, `MysqlAdapter`, `MigrationRunner`, `MIGRATION_DIALECTS`, `createMigrationDialect`, `migrationChecksum`.
+- **Public API (ORM layer):** `defineDatabaseAdapter`, `defineAdapterContext`, `validateAdapterDefinition`, `DEFAULT_ADAPTER_CAPABILITIES`, `DatabaseAdapterCapabilities`, `createAdapterRegistry`, `createConnection`, `ConnectionManager`, `configFromEnv`, `connectionStringFromEnv`, `redactConfig`, `runAdapterConformance`, and the `DatabaseAdapterError` / `AdapterTransactionError` / `UnsupportedCapabilityError` error family. Built-in adapters `createDrizzleAdapter` / `createKyselyAdapter` are exposed only through the `./adapters/drizzle` / `./adapters/kysely` subpaths.
+- **Features:** Lifecycle state machine. Operation tracking with drain. Transaction-scoped executor (savepoints for nested). AbortSignal support. SQL/parameter validation. Frozen normalized results. ORM layer: passive env-based config, multi-connection manager with graceful shutdown, capability discovery, shared conformance tests, native ORM client preservation (`connection.native()` / `tx.client`), and optional `migrate()` delegation to the ORM's own migrator.
+- **Adapters (raw SQL):** `SqliteAdapter` (`node:sqlite` `DatabaseSync`, no native build), `PostgresAdapter` (`pg.Pool`), `MysqlAdapter` (`mysql2` pool) — all with dedicated transaction connections and nested savepoints.
+- **Adapters (ORM):** optional-peer Drizzle and Kysely adapters; BYO ORM via `defineDatabaseAdapter`. `drizzle-orm` and `kysely` are optional `peerDependencies`; the main entry imports neither.
+- **Tests:** 116 runtime + 16 security tests. Real integration tests run against PostgreSQL 16 and MySQL 8.0 (CRUD, injection, commit/rollback, savepoints, concurrency, migrations, tamper detection) and against a real PostgreSQL 16 server for Drizzle, Kysely, and a runnable BYO custom adapter (`examples/custom-orm-adapter.mjs`).
+- **Delivered:** PostgreSQL/MySQL adapters, `MigrationRunner` (checksums + three dialects), `PoolConfig`, corrected `rowCount`, and the full ORM integration layer. **Still missing:** cross-process migration lock, connection retry/failover, built-in Prisma/MikroORM/TypeORM adapters (BYO only), and a unified ORM migration CLI. **Engines:** `>=22.5.0` (`node:sqlite`).
+- **Limitation:** ORM-side integration tests cover PostgreSQL; SQLite/MySQL ORM drivers are user-configurable via `create()` but are not separately claimed. `better-sqlite3` is excluded from native builds (`neverBuiltDependencies`) — it is only an optional peer of `drizzle-orm`, never imported by SvelteX.
 
 #### `@sveltex/validation` — ✅ Ready (contract complete)
 

@@ -1,7 +1,7 @@
 {
   "name": "@sveltex/database",
   "version": "0.1.0",
-  "description": "Driver-neutral database lifecycle, pooled PostgreSQL/MySQL/SQLite adapters, and ordered migrations for SvelteX",
+  "description": "Driver-neutral SQL lifecycle, pooled PostgreSQL/MySQL/SQLite adapters, ordered migrations, and optional ORM integrations (Drizzle/Kysely + BYO ORM) for SvelteX",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -32,18 +32,38 @@
     "./migrations": {
       "types": "./dist/migrations.d.ts",
       "import": "./dist/migrations.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    },
+    "./adapters/drizzle": {
+      "types": "./dist/adapters/drizzle.d.ts",
+      "import": "./dist/adapters/drizzle.js"
+    },
+    "./adapters/kysely": {
+      "types": "./dist/adapters/kysely.d.ts",
+      "import": "./dist/adapters/kysely.js"
     }
   },
   "scripts": {
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test tests/*.test.mjs && tsc -p tests/types/tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs tests/contracts/*.test.mjs tests/core/*.test.mjs tests/adapters/*.test.mjs tests/testing/*.test.mjs && tsc -p tests/types/tsconfig.json",
     "check": "npm run typecheck && npm test",
     "test:unit": "npm test",
     "test:security": "npm run build && node --test tests/security/*.test.mjs",
     "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
-    "test:integration": "npm run build && node --test tests/postgres-integration.test.mjs tests/mysql-integration.test.mjs",
+    "test:integration": "npm run build && node --test tests/postgres-integration.test.mjs tests/mysql-integration.test.mjs tests/adapters/drizzle-integration.test.mjs tests/adapters/kysely-integration.test.mjs",
     "test:coverage": "npm run build && node --experimental-test-coverage --test"
   },
   "engines": {
@@ -61,11 +81,25 @@
     "mysql",
     "sqlite",
     "migrations",
-    "connection-pool"
+    "connection-pool",
+    "orm",
+    "drizzle",
+    "kysely",
+    "byo-orm"
   ],
+  "peerDependencies": {
+    "drizzle-orm": ">=0.36.0 <1",
+    "kysely": ">=0.27.0 <1"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": { "optional": true },
+    "kysely": { "optional": true }
+  },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@types/pg": "^8.23.1"
+    "@types/pg": "^8.23.1",
+    "drizzle-orm": "^0.45.4",
+    "kysely": "^0.29.8"
   },
   "dependencies": {
     "mysql2": "^3.24.6",
