@@ -11,7 +11,7 @@
 
 SvelteX is a modular SvelteKit-native application framework with a DI container, module system, lifecycle management, and progressively built backend packages. The repository has a **solid architectural foundation** in `@sveltex/core` and `@sveltex/sveltekit`, with initial implementations for all Stage 3 packages.
 
-However, the repository had a **P0 blocking defect** that prevented `pnpm install` from succeeding, plus fixture build/typecheck failures. These have been **fixed in this audit session**. The codebase is now in a **buildable and testable state**: **all five stages are implemented and verified** with 450 runtime tests, 71 security tests, and 16 type-test projects passing under `pnpm check`, with the SvelteKit fixture building successfully. The Stage 5 `sveltex` CLI was built strictly **last**, after the Stage 1–4 package APIs and templates were stable and verified.
+However, the repository had a **P0 blocking defect** that prevented `pnpm install` from succeeding, plus fixture build/typecheck failures. These have been **fixed in this audit session**. The codebase is now in a **buildable and testable state**: **all five stages are implemented and verified** with 488 runtime tests, 77 security tests, and 16 type-test projects passing under `pnpm check`, with the SvelteKit fixture building successfully. The Stage 5 `sveltex` CLI was built strictly **last**, after the Stage 1–4 package APIs and templates were stable and verified.
 
 ### Critical findings (fixed)
 
@@ -28,7 +28,7 @@ However, the repository had a **P0 blocking defect** that prevented `pnpm instal
 
 | ID | Severity | Finding | Status |
 | --- | --- | --- | --- |
-| AUD-005 | Medium | No real database provider adapters (PostgreSQL/MySQL/SQLite). Tests use fake drivers only. | **Partly fixed** — real `SqliteAdapter` (`node:sqlite`) + 14 integration tests; PostgreSQL/MySQL still pending |
+| AUD-005 | Medium | No real database provider adapters (PostgreSQL/MySQL/SQLite). Tests use fake drivers only. | **Fixed** — real `SqliteAdapter` (`node:sqlite`), `PostgresAdapter` (`pg.Pool`), and `MysqlAdapter` (`mysql2` pool), each with real integration tests; migrations and pooling shipped |
 | AUD-006 | Medium | No real password-hashing integration. Auth tests use fake hasher. | **Fixed** — real `Argon2Hasher` (Argon2id, `@node-rs/argon2`) + 13 integration tests |
 | AUD-007 | Low | In-memory cache and session stores are single-process only; no Redis/distributed adapter. | **Fixed** — real `RedisCache` (17 tests) + `RedisSessionStore` with atomic Lua scripts (20 tests) |
 | AUD-008 | Low | No reference application demonstrating persistence, validation, auth, and sessions together. | **Fixed** — `examples/reference-app/`, 18 integration tests (memory + live Redis); Stage 3 exit criterion met |
@@ -68,7 +68,7 @@ sveltex/
 ```
 
 **Package count:** 15 implemented packages + 1 SvelteKit fixture app + 1 reference application.  
-**Runtime tests:** 450 passing (Stage 1–3: 262; Stage 4: 131; Stage 5 CLI: 57), 71 security tests, 16 type-test projects.  
+**Runtime tests:** 488 passing (Stage 1–3: 300; Stage 4: 131; Stage 5 CLI: 57), 77 security tests, 16 type-test projects.  
 **Stage 4 packages** (realtime, jobs, storage, mail, testing): **delivered**. **Stage 5** (`sveltex` CLI): **delivered, built last** — 17 commands, six official templates, 57 tests, `npm pack --dry-run` verified.
 
 ---
@@ -182,7 +182,7 @@ Comprehensive across all packages:
 | `@sveltex/shared` | Yes | Yes (6) | N/A | **Yes** | Utility functions, well-tested |
 | `@sveltex/config` | Yes | Yes (8) | N/A | **Yes** | Config composition/validation |
 | `@sveltex/sveltekit` | Yes | Yes (35) | Yes (fixture builds) | **Yes** | Request isolation, hook composition |
-| `@sveltex/database` | Yes | Yes (30) | ✅ SQLite (real), 14 integration tests | **Partial** | PostgreSQL/MySQL, migrations, pooling pending |
+| `@sveltex/database` | Yes | Yes (68) | ✅ SQLite, PostgreSQL 16, MySQL 8.0 (real servers) | **Complete** | ORM path, cross-process migration lock, retry/failover not claimed |
 | `@sveltex/validation` | Yes | Yes (8) | N/A | **Yes** | Standard Schema execution |
 | `@sveltex/auth` | Yes | Yes (29) | ✅ Argon2id (real), 13 integration tests | **Partial** | Reset/verification/OAuth/policies pending |
 | `@sveltex/cache` | Yes | Yes (24) | ✅ Redis (real), 17 integration tests | **Partial** | Tags/advanced invalidation pending |
@@ -203,6 +203,6 @@ Comprehensive across all packages:
 2. **CI pipeline improvement**: Add security tests, stress tests, fixture build, and `npm pack` verification to CI workflow.
 3. **Stage 1 finalization**: Add CHANGELOG.md to shared/config if missing. Verify `npm pack` produces correct file lists.
 4. **Stage 2 finalization**: CI verification of fixture build with installed workspace dependencies (now passing locally).
-5. **✅ Stage 3 enhancement (done in sessions 2–4)**: real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (`@node-rs/argon2`), `RedisCache` and `RedisSessionStore` (`ioredis` + Lua), each with real integration tests; plus `examples/reference-app/` wiring all five packages (18 integration tests). PostgreSQL/MySQL, migrations, pooling, cookie transport, and CSRF remain optional hardening.
+5. **✅ Stage 3 enhancement (done in sessions 2–4)**: real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (`@node-rs/argon2`), `RedisCache` and `RedisSessionStore` (`ioredis` + Lua), each with real integration tests; plus `examples/reference-app/` wiring all five packages (18 integration tests). PostgreSQL/MySQL, migrations and pooling were delivered in the database production-hardening pass (Session 7); cookie transport, CSRF and an ORM path remain optional hardening.
 6. **✅ Stage 4 (done, session 5):** `realtime`, `jobs`, `storage`, `mail`, `testing` — all five delivered with real process-local implementations, 131 runtime + 45 security tests, type tests, READMEs documenting deployment limits, and no untested provider claims.
 7. **✅ Stage 5 (done, session 6):** the `sveltex` CLI — built strictly last, after all package APIs and templates were stable and verified. 17 commands, six official templates, 57 tests, documented safety model and limitations.

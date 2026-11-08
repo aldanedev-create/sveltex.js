@@ -1,7 +1,7 @@
 {
   "name": "@sveltex/database",
   "version": "0.1.0",
-  "description": "Driver-neutral database lifecycle, query and transaction contracts for SvelteX",
+  "description": "Driver-neutral database lifecycle, pooled PostgreSQL/MySQL/SQLite adapters, and ordered migrations for SvelteX",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -20,6 +20,18 @@
     "./sqlite": {
       "types": "./dist/sqlite.d.ts",
       "import": "./dist/sqlite.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js"
+    },
+    "./mysql": {
+      "types": "./dist/mysql.d.ts",
+      "import": "./dist/mysql.js"
+    },
+    "./migrations": {
+      "types": "./dist/migrations.d.ts",
+      "import": "./dist/migrations.js"
     }
   },
   "scripts": {
@@ -31,10 +43,11 @@
     "test:unit": "npm test",
     "test:security": "npm run build && node --test tests/security/*.test.mjs",
     "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
+    "test:integration": "npm run build && node --test tests/postgres-integration.test.mjs tests/mysql-integration.test.mjs",
     "test:coverage": "npm run build && node --experimental-test-coverage --test"
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.5.0"
   },
   "publishConfig": {
     "access": "public"
@@ -43,9 +56,19 @@
     "sveltex",
     "database",
     "transactions",
-    "sql"
+    "sql",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "migrations",
+    "connection-pool"
   ],
   "devDependencies": {
-    "@types/node": "^26.6.6"
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1"
   }
 }

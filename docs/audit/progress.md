@@ -95,13 +95,13 @@
 ### Stage 3 — Essential backend packages (major work)
 
 - [x] **Database**: Implement SQLite adapter via `node:sqlite` (`SqliteAdapter`) — ✅ done, 14 real integration tests
-- [ ] **Database**: Implement PostgreSQL adapter (via `pg`)
-- [ ] **Database**: Implement MySQL adapter (via `mysql2`)
-- [ ] **Database**: Implement migration management
-- [ ] **Database**: Implement connection pooling
-- [ ] **Database**: Add Drizzle ORM integration path
-- [ ] **Database**: Add Prisma integration path
-- [ ] **Database**: Real integration tests for PostgreSQL/MySQL
+- [x] **Database**: Implement PostgreSQL adapter (via `pg`) — ✅ `PostgresAdapter` (`pg.Pool`), real integration tests
+- [x] **Database**: Implement MySQL adapter (via `mysql2`) — ✅ `MysqlAdapter` (`mysql2/promise` pool), real integration tests
+- [x] **Database**: Implement migration management — ✅ `MigrationRunner` with checksums, ordered prefix validation, three dialects
+- [x] **Database**: Implement connection pooling — ✅ shared `PoolConfig` + real driver pools
+- [ ] **Database**: Add Drizzle ORM integration path — not claimed (no ORM)
+- [ ] **Database**: Add Prisma integration path — not claimed (no ORM)
+- [x] **Database**: Real integration tests for PostgreSQL/MySQL — ✅ 24 integration tests against real servers
 - [x] **Auth**: Implement Argon2id password hashing (`@node-rs/argon2`) — ✅ done, 13 real integration tests
 - [ ] **Auth**: Implement password reset flow
 - [ ] **Auth**: Implement email verification
@@ -171,11 +171,11 @@
 
 ## Known limitations
 
-1. Database: PostgreSQL/MySQL adapters, migrations, pooling, and ORM integrations not yet implemented (SQLite is done).
+1. Database: ORM integrations (Drizzle/Prisma), cross-process migration locking, and connection retry/failover are not implemented. PostgreSQL/MySQL adapters, migrations, and pooling are now shipped with real integration tests.
 2. Auth: MFA, password reset, email verification, OAuth/OIDC, authorization policy, and cookie security not yet implemented (Argon2id hashing is done).
 3. Cache: Redis adapter is done; tags and advanced invalidation are deferred.
 4. Session: Redis shared store is done (atomic Lua scripts); database-backed store, cookie transport, and CSRF integration are still pending.
-5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Remaining Stage 3 gaps are provider coverage (PostgreSQL/MySQL), migrations/pooling, session cookie transport/CSRF, and package-level auth policies.
+5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations and pooling are now delivered; remaining Stage 3 gaps are an ORM path, session cookie transport/CSRF, and package-level auth policies.
 6. Stage 4 adapters are explicitly process-local: `InProcessTransport` is not distributed, `InMemoryJobQueue` is not durable, `LocalStorageDriver` is local disk only, `TestTransport` never sends real mail, and `@sveltex/testing` fakes are in-memory only. Each README documents this; no untested provider is claimed.
 7. CI pipeline minimal — no OS/Node matrix, no pack verification.
 8. Stage 5 CLI: no consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages (workspace packages are unpublished). Generated manifests/config/hooks and template rendering are verified; the registry round-trip is CI work.
@@ -187,8 +187,23 @@
 
 **All five stages are complete.** Stages 1–4 exit criteria are satisfied, and the Stage 5 `sveltex` CLI was built **last**, after the ecosystem was stable and verified. The CLI ships 17 commands, six templates, 57 tests, and a documented safety model. Recommended next work, in order:
 
-1. **CI / release:** Node/OS version matrix, fixture build job, `npm pack` + clean consumer install, coverage reporting, and publishing the workspace packages to a registry.
+1. **CI / release:** Node/OS version matrix, fixture build job, `npm pack` + clean consumer install, coverage reporting, and publishing the workspace packages to a registry. Partially delivered in Session 7: CI now uses `--frozen-lockfile`, provisions PostgreSQL/MySQL/Redis services, and runs `pnpm check` + `pnpm test:security`; the matrix, coverage, pack verification and publish remain open.
 2. **Consumer-side verification (blocked on publish):** install → typecheck → build a CLI-generated app against published `@sveltex/*` packages. This is the one Stage 5 exit criterion not yet claimed.
-3. **Stage 3/4 hardening (optional, non-blocking):** PostgreSQL/MySQL adapters, migration management, connection pooling, session cookie transport + CSRF, package-level auth policies; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised.
+3. **Remaining hardening (optional, non-blocking):** an ORM path, cross-process migration locking, session cookie transport + CSRF, package-level auth policies; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised.
 
 Discipline reminder carried from the specification: ecosystem first, CLI last; no fake providers; no claiming untested support; never skip tests to force CI green.
+
+---
+
+## Session 7 — Database production hardening (2026-11-08)
+
+Follow-up after all five stages were complete, per the "Next recommended action #3" backlog.
+
+- Installed and ran real PostgreSQL 16 and MySQL 8.0 servers in the sandbox; created dedicated test databases/accounts and verified connectivity with `psql`/`mysql` before writing any adapter code.
+- Added `PostgresAdapter` (`pg.Pool`) and `MysqlAdapter` (`mysql2/promise` `createPool`): pooled `connect()` with a real `SELECT 1` probe, dedicated transaction connections, `AsyncLocalStorage`-backed nested savepoints, isolated concurrent transactions, correct `rowCount`, and `pool.end()` shutdown.
+- Added `MigrationRunner` with SHA-256 checksums, ordered-prefix validation, transactional application, simple-identifier table validation, and built-in `sqlite`/`postgres`/`mysql` dialects.
+- Added shared `PoolConfig` and strict limit validation; fixed `SqliteAdapter` `rowCount` for plain writes via `total_changes()`.
+- Raised `@sveltex/database` engines to `>=22.5.0` to match `node:sqlite`; documented that other packages still declare `>=20.11`.
+- Updated CI to provision PostgreSQL 16, MySQL 8.0 and Redis 7 services, use `--frozen-lockfile`, and run both `pnpm check` and `pnpm test:security` so integration tests run for real rather than being skipped.
+- Verified integrations against real servers (CRUD, injection, rollback, savepoints, concurrency, migrations, tamper detection) and re-ran the full monorepo: **488/488 runtime tests, 77/77 security tests, 16/16 type-test projects, 0 failures, 0 skipped**.
+- Added security findings SEC-027 – SEC-030 and synced all audit/specification documents.

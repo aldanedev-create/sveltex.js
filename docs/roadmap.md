@@ -2,7 +2,7 @@
 
 SvelteX is developed in five stages. The CLI is the final stage, even though it will be the main onboarding tool developers can choose to install first. The existing Core and SvelteKit adapter are retained and improved; they are not rebuilt.
 
-> **Status (2026-11-08): all five stages are implemented and verified.** 450 runtime tests, 71 security tests, and 16 type-test projects pass under `pnpm check`. See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
+> **Status (2026-11-08): all five stages are implemented and verified.** 488 runtime tests, 77 security tests, and 16 type-test projects pass under `pnpm check`. See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
 
 ## Stage 1 — Foundation
 
@@ -38,7 +38,7 @@ Each package is independently installable. Provider-specific drivers should be o
 
 **Current state:** all five packages now have initial implementations: Database, Validation, Auth, Cache, and Session. Their public APIs are deliberately driver/provider-neutral. Session stores require atomic create, compare-and-set update, and rotation operations; Auth requires an injected password hasher, a precomputed dummy hash, and an optional rate limiter. The in-memory cache/session stores are explicitly single-process development/test implementations.
 
-**Stage 3 outcome:** real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (Argon2id), `RedisCache`, and `RedisSessionStore` (atomic Lua scripts) ship with integration tests; `examples/reference-app/` demonstrates persistence, validation, authentication, authorization, sessions, and caching end-to-end (18 integration tests). PostgreSQL/MySQL, migrations/pooling, cookie transport, and CSRF remain optional hardening. The workspace packages are unpublished, so a clean consumer install is a CI/release task.
+**Stage 3 outcome:** real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (Argon2id), `RedisCache`, and `RedisSessionStore` (atomic Lua scripts) ship with integration tests; `examples/reference-app/` demonstrates persistence, validation, authentication, authorization, sessions, and caching end-to-end (18 integration tests). PostgreSQL/MySQL adapters, migrations and pooling were delivered in the database production-hardening pass; an ORM path, cookie transport and CSRF remain optional hardening. The workspace packages are unpublished, so a clean consumer install is a CI/release task.
 
 ## Stage 4 — Advanced capabilities
 

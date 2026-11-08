@@ -35,6 +35,10 @@
 | SEC-024 | Info | CLI file mutations are previewable and reversible | Existing files are never overwritten without `--force`/`--yes`; `--dry-run` writes nothing; all CLI-owned edits go through `ChangeSet` with rollback (including partial-failure rollback of already-applied files). `init` composes an existing `src/hooks.server.ts` handle as `userHandle` with SvelteKit `sequence()` instead of replacing it, preserving user comments. A failed install rolls back every generated/edited file. | **Secure** |
 | SEC-025 | Info | No fake integrations or invented compatibility | The CLI integration registry lists only the 14 real shipped `@sveltex/*` packages; no SMTP, S3, WebSocket, hosted-Redis, or other provider adapter is advertised. `upgrade` reports CLI-owned metadata only (no registry lookup, no guessed versions). `doctor` reports missing env **names** only and flags process-local adapters in multi-instance/production setups. The `saas` starter explicitly disclaims auth, persistence, billing, and payments. | **Secure** |
 | SEC-026 | Low (fixed) | `init --no-install` was silently ignored | The flag is globally accepted (used by `create`) but `init` still invoked the package manager, so an explicit "do not install" request executed an install and failed offline, rolling back CLI-owned changes. Fixed: `init` now honors `--no-install`, skips installation and the automatic project check, reports `installed: false`, and lists manual install/check steps. A regression test asserts no runner calls occur. | **Fixed** |
+| SEC-027 | Info | Pooled adapters never rewrite SQL | `PostgresAdapter` and `MysqlAdapter` bind values through their drivers' parameterized APIs (`$n` / `?`); no interpolation or SQL parsing. Injection-shaped values are tested against real servers and return zero rows. `Database` still validates SQL and parameter types before dispatch. | **Secure** |
+| SEC-028 | Info | Migration ledger identifiers and checksums | Ledger table names are restricted to simple SQL identifiers; injection-shaped names throw. Every migration is SHA-256 checksummed over its full SQL body, and already-applied migrations must be an unchanged prefix, so tampering or reordering is rejected. Unknown dialects throw instead of being guessed. | **Secure** |
+| SEC-029 | Info | Transaction connection isolation | Each top-level transaction acquires a dedicated pooled connection; concurrent transactions are isolated (verified against real PostgreSQL/MySQL). Nested transactions use `AsyncLocalStorage` + `SAVEPOINT` on the same connection; leaked executors are rejected after settle, and failures roll back and release the connection. | **Secure** |
+| SEC-030 | Low (fixed) | SQLite write `rowCount` was misleading | Plain `INSERT`/`UPDATE`/`DELETE` reported `rowCount: 0` (only `RETURNING` produced a count), so callers could mistake a successful write for a no-op. Fixed with `total_changes()` measured around each statement; covered by regression tests. | **Fixed** |
 
 ---
 
@@ -148,6 +152,28 @@
 - **File safety (SEC-024).** `ChangeSet` snapshots prior content and restores it on rollback; tests cover rollback after a later write fails. `init` preserves user hooks: `export const handle: Handle = auditHandle;` becomes `const userHandle: Handle = auditHandle;` composed via `sequence(createSvelteXHandler(app), userHandle)`. Overwrite protection, dry-run, and install-failure rollback are all covered by tests.
 - **No fake capabilities (SEC-025).** The integration registry is derived from the real workspace packages and their versions; no unshipped provider is listed. `upgrade` performs no network lookup. The `saas` README lists auth/persistence/billing/payments as NOT included and NOT implied. `doctor` warns about process-local adapters under multi-instance/production conditions instead of claiming distributed durability.
 - **Fixed flag handling (SEC-026).** Found during a real `init --no-install` smoke run, not by a test author: the CLI accepted the flag but still ran `pnpm add`, failing offline. Fixed and covered by a regression test.
+
+---
+
+### Database production-hardening security review (SEC-027 – SEC-030)
+
+**Status: Secure (with documented limitations)**
+
+- **Parameterization (SEC-027).** The pooled adapters pass bound values to `pg` / `mysql2` and never
+  parse, interpolate, or rewrite SQL. Placeholders stay dialect-specific (`$n` vs `?`) and are
+  documented, not hidden. Injection payloads are exercised against real servers.
+- **Migration integrity (SEC-028).** Ledger names are validated as simple SQL identifiers; a
+  SHA-256 checksum covers each migration's id and full SQL body. Re-running verifies that applied
+  migrations are an unchanged prefix, so editing or reordering a shipped migration is refused.
+- **Connection isolation (SEC-029).** Top-level transactions use dedicated pooled connections and
+  `BEGIN`/`COMMIT`/`ROLLBACK`; nesting reuses the connection via `AsyncLocalStorage` and `SAVEPOINT`.
+  Concurrent failing transactions do not leak changes, and executors are invalidated on settle.
+- **Honest row counts (SEC-030).** Plain writes now report affected rows rather than `0`, so callers
+  cannot silently misread a successful write as a no-op.
+- **Limitations.** No ORM, no automatic dialect detection, no cross-process migration lock, no
+  retry/failover. MySQL DDL implicitly commits, so DDL-bearing migrations are not atomic there.
+  `pg` and `mysql2` are regular dependencies even for SQLite-only users. TLS is configured
+  explicitly by the caller; the adapters invent no transport defaults.
 
 ---
 

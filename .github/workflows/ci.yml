@@ -6,6 +6,47 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sveltex
+          POSTGRES_PASSWORD: sveltex_test_pw
+          POSTGRES_DB: sveltex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sveltex -d sveltex_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_test_pw
+          MYSQL_DATABASE: sveltex_test
+          MYSQL_USER: sveltex
+          MYSQL_PASSWORD: sveltex_test_pw
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot_test_pw"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      REDIS_URL: redis://127.0.0.1:6379
+      SVELTEX_TEST_POSTGRES_URL: postgresql://sveltex:sveltex_test_pw@127.0.0.1:5432/sveltex_test
+      SVELTEX_TEST_MYSQL_URL: mysql://sveltex:sveltex_test_pw@127.0.0.1:3306/sveltex_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -14,5 +55,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: pnpm test:security

@@ -1,6 +1,28 @@
 export type QueryValue = string | number | boolean | bigint | Date | Uint8Array | null;
 export interface QueryResult<Row> { readonly rows: readonly Row[]; readonly rowCount: number; }
 export interface QueryOptions { readonly signal?: AbortSignal; }
+
+/**
+ * Driver-neutral connection-pool tuning. Pooled adapters map these values onto
+ * their underlying driver; the SQLite adapter has no pool and ignores them.
+ *
+ * `rowCount` returned by any adapter is the number of rows returned by a
+ * `SELECT`/`RETURNING` statement, or the number of rows affected by an
+ * `INSERT`/`UPDATE`/`DELETE` statement.
+ *
+ * @public
+ */
+export interface PoolConfig {
+  /** Maximum pooled connections (default: 10, maximum: 1000). */
+  readonly max?: number;
+  /** Milliseconds an idle connection may stay open (default: 30000). */
+  readonly idleTimeoutMs?: number;
+  /** Milliseconds allowed to establish a connection (default: 5000). */
+  readonly connectionTimeoutMs?: number;
+  /** Milliseconds allowed to wait for a free connection (default: 10000). */
+  readonly acquireTimeoutMs?: number;
+}
+
 export interface DatabaseExecutor {
   query<Row extends Record<string, unknown> = Record<string, unknown>>(sql: string, parameters?: readonly QueryValue[], options?: QueryOptions): Promise<QueryResult<Row>>;
 }

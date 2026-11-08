@@ -110,7 +110,7 @@ These packages must be independently installable. A developer should not need th
 - `@sveltex/validation`: Standard Schema v1 contract complete, 8 tests passing. Vendor-neutral by design.
 - `@sveltex/cache`: Bounded LRU in-memory cache complete (7 tests); production `RedisCache` adapter via `ioredis` complete (17 tests). 24 tests passing. Tags/advanced invalidation deferred.
 - `@sveltex/session`: Session lifecycle + in-memory store complete; production `RedisSessionStore` (ioredis + atomic Lua scripts) complete with 20 real integration tests. 32 tests passing. Cookie transport/CSRF deferred.
-- `@sveltex/database`: Driver contract, lifecycle, transactions complete; `SqliteAdapter` (node:sqlite) complete with 14 real integration tests. 30 tests passing. PostgreSQL/MySQL adapters deferred.
+- `@sveltex/database`: Driver contract, lifecycle, transactions complete; `SqliteAdapter` (`node:sqlite`), `PostgresAdapter` (`pg.Pool`), and `MysqlAdapter` (`mysql2` pool) ship with real integration tests, `MigrationRunner`, and `PoolConfig`. 68 tests passing (24 run against real PostgreSQL/MySQL servers). ORM path not claimed.
 - `@sveltex/auth`: Registration/login/rotation complete; `Argon2Hasher` (Argon2id via `@node-rs/argon2`) complete with 13 real integration tests. 29 tests passing. Password reset, email verification, OAuth deferred.
 - `examples/reference-app`: **Stage 3 exit criterion met.** A real workspace application wiring all five packages end-to-end (SQLite + Argon2id + Redis/memory cache + Redis/memory sessions + Standard Schema validation + fresh-record RBAC). 18 integration tests pass, including 2 against a live Redis instance. See [Stage 3 reference application](#stage-3-reference-application).
 
@@ -121,7 +121,7 @@ These packages must be independently installable. A developer should not need th
 - No package silently imports an optional provider as a mandatory runtime dependency. ✅
 - A reference application demonstrates persistence, validation, authentication, authorization, and sessions. ✅ `examples/reference-app/` — 18 integration tests (16 in-process + 2 real Redis).
 
-**Stage 3 exit status (verified 2026-11-07):** all four criteria are satisfied. The remaining Stage 3 items below (PostgreSQL/MySQL, migrations, pooling, ORM paths, cookie transport, CSRF) are hardening work, not exit blockers. Stages 4 and 5 therefore remain correctly ordered — the CLI stays last.
+**Stage 3 exit status (verified 2026-11-07; database hardening delivered 2026-11-08):** all four criteria are satisfied. PostgreSQL/MySQL adapters, migrations and pooling are now shipped with real integration tests. The remaining Stage 3 items (ORM paths, cookie transport, CSRF) are hardening work, not exit blockers. Stages 4 and 5 therefore remain correctly ordered — the CLI stays last.
 
 ### Stage 4 — Advanced capabilities
 
@@ -218,7 +218,7 @@ examples/
 | shared | ✅ | ✅ | 6/6 | ✅ | Production-ready |
 | config | ✅ | ✅ | 8/8 | ✅ | Production-ready |
 | sveltekit | ✅ | ✅ | 35/35 | ✅ | Production-ready |
-| database | ✅ | ✅ | 30/30 | ✅ | Partial — SQLite done, PostgreSQL/MySQL pending |
+| database | ✅ | ✅ | 68/68 | ✅ | Complete — SQLite/PostgreSQL/MySQL + migrations + pooling |
 | validation | ✅ | ✅ | 8/8 | ✅ | Ready — Standard Schema vendor-neutral |
 | auth | ✅ | ✅ | 29/29 | ✅ | Partial — Argon2id done, reset/OAuth pending |
 | cache | ✅ | ✅ | 24/24 | ✅ | Partial — Redis done, tags/invalidation deferred |
@@ -231,7 +231,7 @@ examples/
 | testing | ✅ | ✅ | 32/32 | ✅ 12/12 | **Stage 4 — ready (real core DI)** |
 | cli (`sveltex`) | ✅ | ✅ | 57/57 | ✅ 9/9 | **Stage 5 — ready (built last)** |
 
-**Total: 450/450 runtime tests passing** (Stage 1–3: 262; Stage 4: 131; Stage 5 CLI: 57), **71/71 security tests** (17 + 45 + 9), **16/16 type-test projects**. Verified with `pnpm check` (0 failures).
+**Total: 488/488 runtime tests passing** (Stage 1–3: 300; Stage 4: 131; Stage 5 CLI: 57), **77/77 security tests** (23 + 45 + 9), **16/16 type-test projects**. Verified with `pnpm check` (0 failures) and `pnpm test:security` (0 skipped).
 
 Each package must have its own `package.json`, source entry point, README, changelog, TypeScript configuration, and tests. A package directory is not considered implemented merely because it exists. The root workspace should build and test packages in dependency order.
 
@@ -530,7 +530,7 @@ Do not create placeholder packages for every future feature merely to fill the w
 
 All Stage 3 packages have substantive implementations with passing tests. They are not empty stubs:
 
-- `@sveltex/database`: Full lifecycle state machine (idle→connecting→ready→closing→closed→failed), operation counting with drain, transaction-scoped executor with active-flag guard, AbortSignal support, SQL/parameter validation, normalized frozen results. Real `SqliteAdapter` (`node:sqlite`) with 14 integration tests; 30 tests total. **Missing:** PostgreSQL/MySQL adapters, migration management, connection pooling, Drizzle/Prisma integration paths.
+- `@sveltex/database`: Full lifecycle state machine (idle→connecting→ready→closing→closed→failed), operation counting with drain, transaction-scoped executor with active-flag guard, AbortSignal support, SQL/parameter validation, normalized frozen results. Real `SqliteAdapter` (`node:sqlite`) with 14 integration tests; 68 tests total after the production-hardening pass. **Delivered:** `PostgresAdapter`, `MysqlAdapter`, `MigrationRunner`, `PoolConfig`, corrected write `rowCount`. **Still missing:** ORM (Drizzle/Prisma) path, cross-process migration lock, retry/failover.
 - `@sveltex/validation`: Standard Schema v1 execution, issue path normalization (string/number/object key), malformed schema rejection, execution-error wrapping, 8 tests. **Vendor-neutral by design** — works with any Standard Schema-compatible library (Zod, Valibot, ArkType, etc.).
 - `@sveltex/auth`: Credential orchestration with injected hasher (no weak default), dummy hash for timing attack mitigation, email normalization, password length limits, attempt limiter, user sanitization (strips passwordHash). Real `Argon2Hasher` (Argon2id via `@node-rs/argon2`) with `generateDummyHash()` and 13 integration tests; 29 tests total. **Missing:** password reset, email verification, OAuth/OIDC, package-level authorization policies. Application-layer RBAC is demonstrated in the reference app.
 - `@sveltex/cache`: Bounded LRU with TTL, injected clock, expiry purge, capacity enforcement, key/TTL validation, `has()` distinguishes cached `undefined` from missing key (7 tests). `RedisCache` adapter via `ioredis` with `keyPrefix` namespaces, `increment`, `getMany`/`setMany` atomic ops, native TTL (17 tests). **Missing:** tags, advanced invalidation, stampede protection.
@@ -557,7 +557,7 @@ Omitting `redisUrl` runs the in-process pair; supplying it switches **both** ses
 
 **Security properties:** no self-granted roles (registration accepts only `email` / `password` / `displayName`; `admin` comes from trusted `adminEmails`), authorization never trusts a cached role, `createPost` takes `authorId` from the session, all SQL is parameterized, `grantRole` enforces an allow-list and invalidates the profile cache, and `rotateSession` demonstrates atomic ID rotation.
 
-**Verification:** 18 integration tests (16 in-process + 2 live Redis) plus a public-API type test; all pass under `pnpm check`. This section records the Stage 3 baseline; repo-wide totals after Stage 5 are **450/450 runtime tests** (see the Stage 4 and Stage 5 implementation baselines below).
+**Verification:** 18 integration tests (16 in-process + 2 live Redis) plus a public-API type test; all pass under `pnpm check`. This section records the Stage 3 baseline; repo-wide totals at the end of Stage 5 were **450/450 runtime tests** (historical baseline; see the database production-hardening baseline below for the current 488/488 total).
 
 ## Stage 4 implementation baseline (added 2026-11-07)
 
@@ -569,7 +569,7 @@ All five Stage 4 packages have substantive, tested implementations. None is a pl
 - `@sveltex/mail`: `MailMessage`/`MailTransport` contracts, `validateMessage` (address + header-injection checks), `renderTemplate` (HTML escaping by default), `computeRetryDelay`, `Mailer` (bounded capped-backoff retries, injectable `sleep`/`now`, permanent failure → `MailSendError` with attempts and cause), and `TestTransport` (deterministic in-memory, never sends real mail). 26 tests (17 + 9). **Not shipped:** SMTP/HTTP provider adapters.
 - `@sveltex/testing`: `TestApplication`/`createTestApplication`/`withTestApplication`/`createRequestFixture` built on the **real** `@sveltex/core` `createApplication`, `defineModule`, `token`, `Container` — no parallel DI implementation. `FakeClock`, `LifecycleRecorder`, `testToken`, three provider helpers, `defineTestModule`, plus `FakeKeyValueAdapter` and `FakeMessageTransport` in-memory fakes with `failNext()` and frozen snapshots. 32 tests (20 + 12).
 
-All five ship strict TypeScript declarations, READMEs documenting process-local limitations, changelogs, and public-API type tests. `npm pack --dry-run` was verified for each: only `dist/`, `README.md`, `CHANGELOG.md`, and `package.json` are published. Repo-wide totals after Stage 4 were **393/393 runtime tests, 62/62 security tests, 15/15 type-test projects**; after Stage 5 they are **450/450, 71/71, 16/16**, verified with `pnpm check`.
+All five ship strict TypeScript declarations, READMEs documenting process-local limitations, changelogs, and public-API type tests. `npm pack --dry-run` was verified for each: only `dist/`, `README.md`, `CHANGELOG.md`, and `package.json` are published. Repo-wide totals after Stage 4 were **393/393 runtime tests, 62/62 security tests, 15/15 type-test projects**; after Stage 5 they were **450/450, 71/71, 16/16** (Stage 5 baseline), verified with `pnpm check`. The current totals after database hardening are 488/488, 77/77, 16/16.
 
 ## Stage 5 implementation baseline (added 2026-11-08)
 
@@ -581,6 +581,42 @@ The `sveltex` CLI is a real, tested development tool — not a placeholder — a
 - **Safety:** `ChangeSet` preview/apply/rollback for every CLI-owned file; `--dry-run` writes nothing; overwrite requires `--force`/`--yes`; `init` composes an existing `src/hooks.server.ts` handle as `userHandle` with SvelteKit `sequence()` and preserves comments; `sveltex.config.ts` is inspected **as text** and never imported/executed, with secret redaction and env **names** only (never values or invented values); all child processes run with `shell: false` and argument arrays; project names, generated paths, package specifiers (including leading-dash option injection), encoded traversal, and NUL are rejected; conflicting lockfiles stop the command; a failed install rolls back all CLI-owned changes. `init --no-install` was fixed to actually skip installation and the automatic check (previously the flag was silently ignored).
 - **Integrations:** the registry lists only the 14 real shipped `@sveltex/*` packages and their compatibility metadata. No SMTP, S3, WebSocket, hosted-Redis, or other provider adapter is advertised. `upgrade` reports CLI-owned metadata only — no registry lookup, no guessed versions. `doctor` flags process-local adapters in multi-instance/production setups.
 - **CLI output:** stable `CliResult`, single-object `--json` mode, and exit codes `0` (success), `1` (failure), `2` (usage), `3` (project/config/compatibility), `4` (cancelled). `runCli()` never calls `process.exit()` itself, so the API is embeddable and testable.
-- **Verification:** `pnpm --filter sveltex test` → 57/57; `npm pack --dry-run` → 173 files (41 templates + 32 `dist/*.js` + 32 `dist/*.d.ts` + metadata), no source/test leakage; real `create` and `init` smoke runs verified generated files, hooks composition, and rollback. `pnpm check` → 450/450 runtime, `pnpm test:security` → 71/71, `pnpm test:types` → 16/16 projects.
+- **Verification:** `pnpm --filter sveltex test` → 57/57; `npm pack --dry-run` → 173 files (41 templates + 32 `dist/*.js` + 32 `dist/*.d.ts` + metadata), no source/test leakage; real `create` and `init` smoke runs verified generated files, hooks composition, and rollback. `pnpm check` → 450/450 runtime, `pnpm test:security` → 71/71, `pnpm test:types` → 16/16 projects (Stage 5 baseline; current totals are 488/488, 77/77, 16/16).
 
 **Not claimed:** generated apps have not been installed from a public registry (the workspace packages are unpublished), so a consumer-side `install → typecheck → build` pass remains CI work. The CLI ships no external provider adapters and does not claim distributed durability for any process-local adapter.
+
+---
+
+## Database production-hardening baseline (2026-11-08)
+
+Follow-up hardening after all five stages were complete (the "Stage 3/4 hardening" backlog item).
+The CLI remains built last; no ordering was changed.
+
+| Capability | Delivery |
+| --- | --- |
+| PostgreSQL adapter | `PostgresAdapter` (`pg.Pool`) — pooled connections, real `SELECT 1` probe, dedicated transaction connections, `AsyncLocalStorage` + `SAVEPOINT` nesting, `pool.end()` shutdown |
+| MySQL adapter | `MysqlAdapter` (`mysql2/promise` `createPool`) — same transaction/savepoint model |
+| Connection pooling | Shared `PoolConfig` (`max`, `idleTimeoutMs`, `connectionTimeoutMs`, `acquireTimeoutMs`) with strict validation |
+| Migrations | `MigrationRunner` — ordered unique ids, SHA-256 checksums, prefix validation, transactional application, built-in `sqlite`/`postgres`/`mysql` dialects |
+| `rowCount` | Returned rows for `SELECT`/`RETURNING`; affected rows for writes (SQLite via `total_changes()`, PostgreSQL via `rowCount`, MySQL via `affectedRows`) |
+
+**Real integration tests.** 24 PostgreSQL/MySQL tests connect to real PostgreSQL 16 and MySQL 8.0
+servers (CRUD, injection, commit/rollback, nested savepoints, concurrent isolation, migrations,
+checksum tampering). CI provisions PostgreSQL 16, MySQL 8.0 and Redis 7 services and runs
+`pnpm check` plus `pnpm test:security`, so these tests execute rather than being skipped.
+`SVELTEX_TEST_POSTGRES_URL` / `SVELTEX_TEST_MYSQL_URL` override the local defaults;
+`SVELTEX_SKIP_DB_INTEGRATION=1` is an explicit opt-out, never an automatic green.
+
+**Not claimed.** No ORM/query builder, no automatic dialect detection, no SQL rewriting
+(placeholders remain dialect-specific), no cross-process migration lock, no retry/failover.
+MySQL DDL implicitly commits, so DDL-bearing migrations are not atomic there. `pg` and `mysql2`
+are regular dependencies even for SQLite-only users.
+
+**Node.js.** `@sveltex/database` declares `engines >=22.5.0` because `node:sqlite` first
+appeared there; other packages still declare `>=20.11`. This resolves the earlier conflict
+between the manifest and the README.
+
+**Verification.** `pnpm check` → 488/488 runtime (0 failures, 0 skipped),
+`pnpm test:security` → 77/77, `pnpm test:types` → 16/16 projects,
+`npm pack --dry-run` for `@sveltex/database` → 27 files including all six `dist/*.js`
+entries and README/CHANGELOG. Security findings SEC-027 – SEC-030 added.

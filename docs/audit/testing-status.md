@@ -13,7 +13,7 @@
 | `@sveltex/shared` | 6 | 1 | ✅ | — | — | 7 | All pass |
 | `@sveltex/config` | 8 | 1 | ✅ | — | — | 9 | All pass |
 | `@sveltex/sveltekit` | 35 | 5 | ✅ | ✅ | ✅ | 40+ | All pass |
-| `@sveltex/database` | 30 | 1 | ✅ | — | ✅ SQLite | 31 | All pass |
+| `@sveltex/database` | 68 | 7 | ✅ | — | ✅ SQLite + real PG/MySQL | 75 | All pass |
 | `@sveltex/validation` | 8 | 1 | ✅ | — | — | 9 | All pass |
 | `@sveltex/auth` | 29 | 1 | ✅ | — | ✅ Argon2id | 30 | All pass |
 | `@sveltex/cache` | 24 | 1 | ✅ | — | ✅ Redis | 25 | All pass |
@@ -25,13 +25,13 @@
 | `@sveltex/mail` | 17 | 9 | ✅ | — | ✅ Test transport | 26 | All pass |
 | `@sveltex/testing` | 20 | 12 | ✅ | — | ✅ Real core DI | 32 | All pass |
 | `sveltex` (CLI) | 48 | 9 | ✅ | — | ✅ Real fs + recorder runner | 57 | All pass |
-| **Total** | **450** | **71** | **16/16** | **2** | **Partial** | **521+** | **All pass** |
+| **Total** | **488** | **77** | **16/16** | **2** | **Partial** | **565+** | **All pass** |
 
 ---
 
 ## Test infrastructure
 
-> **Counting note (updated 2026-11-08):** `450` is the measured total of `pnpm -r test` (the `pnpm check` gate): 393 Stage 1–4 + 57 Stage 5 CLI. Stage 4 packages and the CLI include their `tests/security/*.test.mjs` files inside the package `test` script, so the CLI's 9 security cases are part of that 450; Stage 1–3 packages run security cases only through the separate `test:security` gate. `71` is the measured total of the standalone `pnpm test:security` chain (17 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI). These are two distinct gates, not an additive total.
+> **Counting note (updated 2026-11-08):** `488` is the measured total of `pnpm -r test` (the `pnpm check` gate): 431 Stage 1–4 + 57 Stage 5 CLI, with the +38 coming from `@sveltex/database` production hardening. Stage 4 packages and the CLI include their `tests/security/*.test.mjs` files inside the package `test` script, so the CLI's 9 security cases are part of that 488; Stage 1–3 packages run security cases only through the separate `test:security` gate. `77` is the measured total of the standalone `pnpm test:security` chain (23 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI; the database package grew from 1 to 7). These are two distinct gates, not an additive total.
 
 ### Runner
 
@@ -115,7 +115,7 @@ Each package has `tests/types/public-api.test.ts` verifying:
 
 ## Known testing gaps
 
-1. **No PostgreSQL/MySQL integration tests** — Only SQLite adapter implemented so far.
+1. ~~**No PostgreSQL/MySQL integration tests**~~ — resolved: 24 integration tests run against real PostgreSQL 16 and MySQL 8.0 servers (CI provisions both). An ORM path and cross-process migration locking remain out of scope.
 2. **No session database-backed store** — Redis-backed store is implemented and tested; a SQL-backed store is still pending. Cookie transport and CSRF remain out of scope for the `session` package (reference-app wiring is now delivered as an application-level concern).
 3. ~~**No reference application tests**~~ — Resolved: 18 integration tests (in-process + live Redis) cover the full assembly. The Redis suite self-skips when no server is reachable; it never substitutes a fake.
 4. **No `npm pack` + clean installation tests in CI** — Local verification done, CI not configured.

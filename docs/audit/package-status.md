@@ -13,7 +13,7 @@
 | `@sveltex/shared` | ✅ Pass | ✅ Pass | ✅ 6/6 | ✅ 1/1 | ✅ Pass | **Stage 1 — Ready** |
 | `@sveltex/config` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 1 — Ready** |
 | `@sveltex/sveltekit` | ✅ Pass | ✅ Pass | ✅ 35/35 | ✅ 5/5 | ✅ Pass | **Stage 2 — Ready** |
-| `@sveltex/database` | ✅ Pass | ✅ Pass | ✅ 30/30 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (SQLite done)** |
+| `@sveltex/database` | ✅ Pass | ✅ Pass | ✅ 68/68 | ✅ 7/7 | ✅ Pass | **Stage 3 — Complete (SQLite/PostgreSQL/MySQL + migrations + pooling)** |
 | `@sveltex/validation` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 3 — Ready** |
 | `@sveltex/auth` | ✅ Pass | ✅ Pass | ✅ 29/29 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Argon2id done)** |
 | `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
@@ -26,7 +26,7 @@
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **450/450** | **71/71** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **488/488** | **77/77** | **16/16** | **All pass** |
 
 ---
 
@@ -74,14 +74,14 @@
 
 ### Stage 3 — Essential backend packages
 
-#### `@sveltex/database` — ⚠️ Partial (SQLite adapter implemented, others pending)
+#### `@sveltex/database` — ✅ Complete (SQLite, PostgreSQL, MySQL, migrations, pooling)
 
 - **Source:** `index.ts` (101 lines) + `sqlite.ts` (real `node:sqlite` adapter).
-- **Public API:** `Database`, `DatabaseDriver`, `DatabaseExecutor`, `QueryResult`, `QueryOptions`, `QueryValue`, `DatabaseState`, `DatabaseError`, `DatabaseLifecycleError`, `DatabaseDriverError`, `SqliteAdapter`.
+- **Public API:** `Database`, `DatabaseDriver`, `DatabaseExecutor`, `QueryResult`, `QueryOptions`, `QueryValue`, `PoolConfig`, `DatabaseState`, `DatabaseError`, `DatabaseLifecycleError`, `DatabaseDriverError`, `SqliteAdapter`, `PostgresAdapter`, `MysqlAdapter`, `MigrationRunner`, `MIGRATION_DIALECTS`, `createMigrationDialect`, `migrationChecksum`.
 - **Features:** Lifecycle state machine. Operation tracking with drain. Transaction-scoped executor (savepoints for nested). AbortSignal support. SQL/parameter validation. Frozen normalized results.
 - **Adapters:** `SqliteAdapter` uses the built-in `node:sqlite` `DatabaseSync` (no native compilation step). Handles `bigint`, `Date`, `boolean`, `Uint8Array` parameter conversion.
 - **Tests:** 30 tests — 16 unit/security + 14 real SQLite integration tests (`tests/sqlite-integration.test.mjs`), including transactions, rollbacks, savepoints, bigint/Date/blob parameters, readonly mode, and WAL.
-- **Missing:** PostgreSQL/MySQL adapters. Migration management. Connection pooling integration. Drizzle/Prisma integration.
+- **Delivered:** Real `PostgresAdapter` (`pg.Pool`) and `MysqlAdapter` (`mysql2` pool) with dedicated transaction connections and nested savepoints; `MigrationRunner` with checksums and three dialects; shared `PoolConfig`; corrected write `rowCount`. **Still missing:** ORM (Drizzle/Prisma) path, cross-process migration lock, connection retry/failover. **Engines:** `>=22.5.0` (`node:sqlite`).
 - **Limitation:** Real integration verified only for SQLite (in-process, no external service).
 
 #### `@sveltex/validation` — ✅ Ready (contract complete)

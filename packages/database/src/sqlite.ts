@@ -20,12 +20,18 @@ export interface SqliteAdapterOptions {
 /**
  * SQLite adapter implementing the {@link DatabaseDriver} contract.
  *
- * Uses Node.js built-in `node:sqlite` (available in Node.js 22+). No native
- * dependencies required. The adapter wraps the synchronous SQLite API in
- * async-compatible methods to match the `DatabaseDriver` contract.
+ * Uses Node.js built-in `node:sqlite` (Node.js 22.5+). No native dependencies.
+ * SQL uses SQLite's `?` placeholders; the adapter never rewrites SQL. It is
+ * single-connection and has no pool — use the PostgreSQL or MySQL adapter for
+ * multi-connection deployments.
+ *
+ * `rowCount` is the number of returned rows for a `SELECT`/`RETURNING`
+ * statement, or the number of affected rows for `INSERT`/`UPDATE`/`DELETE`
+ * (measured with SQLite's `total_changes()` around each statement).
  *
  * Transactions use manual `BEGIN`/`COMMIT`/`ROLLBACK` to support async
- * callback bodies. Nested transactions use `SAVEPOINT`/`RELEASE`/`ROLLBACK TO`.
+ * callback bodies. Nested transactions use `SAVEPOINT`/`RELEASE`/`ROLLBACK TO`
+ * on the shared connection.
  *
  * @example
  * ```ts
@@ -36,8 +42,8 @@ export interface SqliteAdapterOptions {
  * const db = new Database(adapter);
  * await db.connect();
  * try {
- *   await db.query('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
- *   await db.query('INSERT INTO users (name) VALUES (?)', ['Alice']);
+ *   const created = await db.query("INSERT INTO users (name) VALUES (?)", ['Alice']);
+ *   console.log(created.rowCount); // 1
  *   const result = await db.query('SELECT * FROM users');
  *   console.log(result.rows); // [{ id: 1, name: 'Alice' }]
  * } finally {
@@ -84,17 +90,7 @@ export class SqliteAdapter implements DatabaseDriver {
     parameters: readonly QueryValue[] = [],
     _options?: QueryOptions,
   ): Promise<QueryResult<Row>> {
-    const db = this.#requireConnection();
-    const stmt = db.prepare(sql);
-    const rawRows = stmt.all(...this.#convertParameters(parameters));
-    const rows = rawRows.map(row => {
-      // node:sqlite returns null-prototype objects; convert to regular objects
-      if (row !== null && typeof row === 'object') {
-        return { ...row } as Row;
-      }
-      return row as Row;
-    });
-    return { rows, rowCount: rows.length };
+    return this.#execute<Row>(sql, parameters);
   }
 
   async transaction<T>(
@@ -103,7 +99,7 @@ export class SqliteAdapter implements DatabaseDriver {
   ): Promise<T> {
     const db = this.#requireConnection();
     const isNested = this.#txDepth > 0;
-    const spName = isNested ? `sveltex_sp_${this.#txDepth}` : undefined;
+    const spName = isNested ? `sveltex_sp_${String(this.#txDepth)}` : undefined;
 
     if (isNested) {
       db.exec(`SAVEPOINT ${spName}`);
@@ -123,15 +119,7 @@ export class SqliteAdapter implements DatabaseDriver {
         if (queryOptions?.signal?.aborted) {
           throw queryOptions.signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
         }
-        const stmt = db.prepare(sql);
-        const rawRows = stmt.all(...this.#convertParameters(parameters));
-        const rows = rawRows.map(row => {
-          if (row !== null && typeof row === 'object') {
-            return { ...row } as Row;
-          }
-          return row as Row;
-        });
-        return { rows, rowCount: rows.length };
+        return this.#execute<Row>(sql, parameters);
       },
     });
 
@@ -160,6 +148,29 @@ export class SqliteAdapter implements DatabaseDriver {
     } finally {
       this.#txDepth -= 1;
     }
+  }
+
+  /** Execute one statement and derive `rowCount` without parsing the SQL. */
+  #execute<Row extends Record<string, unknown>>(sql: string, parameters: readonly QueryValue[]): QueryResult<Row> {
+    const db = this.#requireConnection();
+    const before = this.#totalChanges(db);
+    const stmt = db.prepare(sql);
+    const rawRows = stmt.all(...this.#convertParameters(parameters));
+    const after = this.#totalChanges(db);
+    const rows = rawRows.map(row => {
+      // node:sqlite returns null-prototype objects; convert to regular objects
+      if (row !== null && typeof row === 'object') {
+        return { ...row } as Row;
+      }
+      return row as Row;
+    });
+    return { rows, rowCount: rows.length > 0 ? rows.length : Math.max(0, after - before) };
+  }
+
+  #totalChanges(db: DatabaseSync): number {
+    const row = db.prepare('SELECT total_changes() AS c').get() as { c?: unknown } | undefined;
+    const value = row?.c;
+    return typeof value === 'number' && Number.isFinite(value) ? value : Number(value ?? 0);
   }
 
   #requireConnection(): DatabaseSync {

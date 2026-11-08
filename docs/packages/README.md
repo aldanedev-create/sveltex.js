@@ -22,6 +22,6 @@ SvelteX is split into independently installable packages. Build the application 
 
 Do not add placeholder packages for future stages. Each package must have a useful implementation, stable public contracts, strict type checks, public API type tests, unit/integration/security tests, package export checks, and documentation before it is considered complete.
 
-All five stages are now implemented and verified (450 runtime tests, 71 security tests, 16 type-test projects). The CLI was deliberately built last; it consumes the stable package contracts and lists only real shipped integrations. No external provider adapter (SMTP/S3/WebSocket/hosted Redis, PostgreSQL/MySQL) is shipped or advertised.
+All five stages are now implemented and verified (488 runtime tests, 77 security tests, 16 type-test projects). The CLI was deliberately built last; it consumes the stable package contracts and lists only real shipped integrations. `@sveltex/database` ships real PostgreSQL and MySQL adapters plus migrations and pooling. No external provider adapter (SMTP/S3/WebSocket/hosted Redis) is shipped or advertised.
 
 See [`../specification.md`](../specification.md) for package responsibilities, API rules, acceptance criteria, and the complete CLI specification.

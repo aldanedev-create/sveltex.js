@@ -25,7 +25,7 @@ The package runtime test totals include the focused security test in each new pa
 
 - The full root `pnpm check` command was not run. pnpm was not installed, and Corepack could not download pnpm 10.20.0 because the npm registry was unreachable.
 - The SvelteKit fixture's actual `svelte-check` and Vite production build were not run. Adapter unit, security, lifecycle, and stress suites plus adapter/Core type tests passed independently.
-- Database tests use fake drivers. No real PostgreSQL, MySQL, SQLite, or other provider adapter is included in this stage.
+- Database tests use fake drivers. No real PostgreSQL, MySQL, SQLite, or other provider adapter is included in this stage. **(Historical stage report — superseded.)** The shipped `@sveltex/database` package now includes real SQLite (`node:sqlite`), PostgreSQL (`pg`) and MySQL (`mysql2`) adapters with integration tests against real servers; see `docs/audit/package-status.md` and `docs/specification.md`.
 - Auth tests use fake password hashing and storage ports. No password-hashing algorithm or production identity provider is bundled. Production use must supply an audited hasher, a valid precomputed dummy hash using the same parameters, a persistent user store with atomic uniqueness, rate limiting, and secure session/cookie integration.
 - The memory cache and memory session store are single-process test/development implementations. Production deployments need shared persistent/distributed adapters. Session storage must implement atomic create, revision compare-and-set, and rotation.
 - These results establish a tested implementation baseline, not a production certification or security audit.
