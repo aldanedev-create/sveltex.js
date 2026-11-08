@@ -1,0 +1,78 @@
+<script lang="ts">
+  const appName = '{{APP_NAME}}';
+  const chapters = [
+    { id: 'start', title: 'Getting started', text: 'Run {{DEV_COMMAND}} and open the local development URL.' },
+    { id: 'structure', title: 'Project structure', text: 'src/routes/ holds pages; src/lib/server/ holds application composition.' },
+    { id: 'config', title: 'Configuration', text: 'sveltex.config.ts is the canonical SvelteX configuration file.' }
+  ];
+</script>
+
+<svelte:head>
+  <title>{appName} - Documentation</title>
+</svelte:head>
+
+<main>
+  <header>
+    <p class="eyebrow">Documentation starter</p>
+    <h1>{appName}</h1>
+    <p>Static documentation content. No client-side JavaScript is required.</p>
+  </header>
+
+  <nav aria-label="Chapters">
+    {#each chapters as chapter (chapter.id)}
+      <a href={'#' + chapter.id}>{chapter.title}</a>
+    {/each}
+  </nav>
+
+  {#each chapters as chapter (chapter.id)}
+    <article id={chapter.id}>
+      <h2>{chapter.title}</h2>
+      <p>{chapter.text}</p>
+    </article>
+  {/each}
+
+  <p><a href="{{DOCS_URL}}" rel="noreferrer">Official SvelteX documentation</a></p>
+</main>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    color-scheme: light dark;
+    line-height: 1.65;
+  }
+
+  main {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3rem);
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-block: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  }
+
+  a {
+    color: inherit;
+  }
+
+  a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  article {
+    padding-block: 0.75rem;
+  }
+</style>

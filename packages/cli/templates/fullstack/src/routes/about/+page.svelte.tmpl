@@ -1,0 +1,36 @@
+<script lang="ts">
+  const appName = '{{APP_NAME}}';
+</script>
+
+<svelte:head>
+  <title>About - {appName}</title>
+</svelte:head>
+
+<main>
+  <h1>About {appName}</h1>
+  <p>
+    This page is real project source. The application is composed with SvelteX
+    modules registered in src/lib/server/modules/index.ts.
+  </p>
+  <p><a href="/">Back to the welcome page</a></p>
+</main>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    color-scheme: light dark;
+  }
+
+  main {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3rem);
+    line-height: 1.6;
+  }
+
+  a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+</style>

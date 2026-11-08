@@ -17,8 +17,15 @@ sveltex/
 │   ├── validation/# Standard Schema validation (Stage 3)
 │   ├── auth/      # Credential auth orchestration ports (Stage 3)
 │   ├── cache/     # Cache contracts and bounded memory cache (Stage 3)
-│   └── session/   # Versioned session lifecycle and store contract (Stage 3)
-├── docs/           # Product specification, architecture, decisions, roadmap
+│   ├── session/   # Versioned session lifecycle and store contract (Stage 3)
+│   ├── realtime/  # Typed channels + in-process transport (Stage 4)
+│   ├── jobs/      # Queue, retries, worker lifecycle (Stage 4)
+│   ├── storage/   # Storage contract + local filesystem driver (Stage 4)
+│   ├── mail/      # Message/template contract + test transport (Stage 4)
+│   ├── testing/   # Builders over real core DI (Stage 4)
+│   └── cli/       # `sveltex` CLI — 17 commands, six templates (Stage 5, built last)
+├── examples/       # Stage 3 reference application
+├── docs/           # Product specification, architecture, decisions, roadmap, audit
 ├── pnpm-workspace.yaml
 └── turbo.json
 ```
@@ -89,6 +96,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for workspace checks and package boundari
 
 The monorepo follows five stages: Foundation, SvelteKit integration, Essential backend packages, Advanced capabilities, and Developer experience. The CLI is deliberately the final implementation stage, although developers will be able to install and use it first. Existing Core and SvelteKit packages are preserved rather than recreated.
 
+**All five stages are now implemented and verified.** The `sveltex` CLI was built last, after the package contracts were stable; it is a development tool and generated applications never depend on it at runtime.
+
 - [`@sveltex/core`](packages/core/README.md) — existing foundation
 - [`@sveltex/shared`](packages/shared/README.md) — Stage 1
 - [`@sveltex/config`](packages/config/README.md) — Stage 1
@@ -98,6 +107,12 @@ The monorepo follows five stages: Foundation, SvelteKit integration, Essential b
 - [`@sveltex/auth`](packages/auth/README.md) — credential authentication orchestration
 - [`@sveltex/cache`](packages/cache/README.md) — bounded memory cache and cache contract
 - [`@sveltex/session`](packages/session/README.md) — versioned session lifecycle and storage contract
+- [`@sveltex/realtime`](packages/realtime/README.md) — Stage 4 — typed channels, required authorization, in-process transport
+- [`@sveltex/jobs`](packages/jobs/README.md) — Stage 4 — queue, retries/backoff, worker lifecycle
+- [`@sveltex/storage`](packages/storage/README.md) — Stage 4 — storage contract + local filesystem driver
+- [`@sveltex/mail`](packages/mail/README.md) — Stage 4 — message/template contract + test transport
+- [`@sveltex/testing`](packages/testing/README.md) — Stage 4 — builders over real core DI
+- [`sveltex`](packages/cli/README.md) — Stage 5 CLI — built last; 17 commands and six official templates
 
 See [`docs/specification.md`](docs/specification.md) for the full package plan, package boundaries, acceptance criteria, and the Stage 5 CLI specification. See [`docs/roadmap.md`](docs/roadmap.md) for current delivery status and [`docs/testing/verification-report.md`](docs/testing/verification-report.md) for exact local test results and verification limitations.
 
@@ -110,4 +125,6 @@ See [`docs/specification.md`](docs/specification.md) for the full package plan, 
 
 ## Status
 
-The workspace includes the Core engine, the SvelteKit adapter, a real SvelteKit fixture application, and unit, integration-contract, concurrency, security, lifecycle, stress, compatibility, and public-type tests. Package APIs may change before 1.0. The in-memory cache and session store are development/test implementations, not distributed production stores. Database and authentication integrations require an explicitly selected driver and password hasher. Run `pnpm check` in CI before publishing.
+All five stages are implemented and verified: 450 runtime tests, 71 security tests, and 16 type-test projects pass under `pnpm check` (0 failures). The workspace includes 15 packages, a real SvelteKit fixture application, and a Stage 3 reference application. Package APIs may change before 1.0. The in-memory cache/session stores and all Stage 4 process-local adapters are explicitly **not** distributed production stores; each README documents the limitation and `sveltex doctor` flags multi-instance mismatches. Database and authentication integrations require an explicitly selected driver and password hasher. The CLI ships no external provider adapters and makes no registry lookups.
+
+Not yet claimed: workspace packages are unpublished, so a consumer-side `install → typecheck → build` of a CLI-generated app against registry-published packages, plus Node/OS CI matrices and clean-install verification, remain CI/release work. Run `pnpm check` in CI before publishing.

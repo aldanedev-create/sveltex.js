@@ -1,0 +1,11 @@
+import { createApplication } from '@sveltex/core';
+import { modules } from './modules/index';
+
+/** One SvelteX application instance for this process. No global singleton is created. */
+export const app = createApplication({
+  config: {
+    name: '{{APP_NAME}}',
+    environment: 'development'
+  },
+  modules
+});

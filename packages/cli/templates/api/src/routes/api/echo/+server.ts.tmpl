@@ -1,0 +1,32 @@
+import { json } from '@sveltejs/kit';
+import { safeValidate, type StandardSchemaV1 } from '@sveltex/validation';
+import type { RequestHandler } from './$types';
+
+const echoSchema: StandardSchemaV1<unknown, { message: string }> = {
+  '~standard': {
+    version: 1,
+    vendor: 'sveltex-api-starter',
+    validate: (value: unknown) => {
+      if (typeof value !== 'object' || value === null || !('message' in value)) {
+        return { issues: [{ message: 'message is required' }] };
+      }
+      const message = (value as { message: unknown }).message;
+      if (typeof message !== 'string' || message.length === 0 || message.length > 200) {
+        return { issues: [{ message: 'message must be a string of 1-200 characters' }] };
+      }
+      return { message };
+    }
+  }
+};
+
+export const POST: RequestHandler = async ({ request }) => {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Request body must be valid JSON.' }, { status: 400 });
+  }
+  const result = await safeValidate(echoSchema, body);
+  if (!result.success) return json({ issues: result.issues }, { status: 422 });
+  return json({ echo: result.data.message });
+};

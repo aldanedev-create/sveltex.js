@@ -1,4 +1,4 @@
-import { cloneData, deepFreeze, isPlainObject, SvelteXError } from '@sveltexjs/shared';
+import { cloneData, deepFreeze, isPlainObject, SvelteXError } from '@sveltex/shared';
 
 export type ConfigIssue = { path: string; message: string; code: string };
 export type ConfigValidator<T> = (value: unknown) => value is T;

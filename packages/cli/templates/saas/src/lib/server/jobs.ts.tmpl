@@ -1,0 +1,10 @@
+import { InMemoryJobQueue } from '@sveltex/jobs/in-memory';
+import type { JobQueue } from '@sveltex/jobs';
+
+/**
+ * A real, working queue - but process-local and NOT durable. Replace with a
+ * database/broker-backed JobQueue before running more than one instance.
+ */
+export function createExampleQueue(): JobQueue {
+  return new InMemoryJobQueue();
+}

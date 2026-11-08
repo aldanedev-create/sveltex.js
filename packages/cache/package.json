@@ -1,5 +1,5 @@
 {
-  "name": "@sveltexjs/cache",
+  "name": "@sveltex/cache",
   "version": "0.1.0",
   "description": "Driver-neutral cache contracts and a bounded in-memory cache implementation",
   "license": "MIT",
@@ -16,13 +16,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./redis": {
+      "types": "./dist/redis.d.ts",
+      "import": "./dist/redis.js"
     }
   },
   "scripts": {
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test && tsc -p tests/types/tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs && tsc -p tests/types/tsconfig.json",
     "test:unit": "npm test",
     "test:security": "npm run build && node --test tests/security/*.test.mjs",
     "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
@@ -34,5 +38,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {}
+  "dependencies": {
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
 }

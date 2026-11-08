@@ -5,13 +5,13 @@ Typed configuration composition and validation helpers. This package performs no
 ## Install
 
 ```sh
-pnpm add @sveltexjs/config
+pnpm add @sveltex/config
 ```
 
 ## Define and merge configuration
 
 ```ts
-import { defineConfig, mergeConfig, validateConfig } from '@sveltexjs/config';
+import { defineConfig, mergeConfig, validateConfig } from '@sveltex/config';
 
 const base = defineConfig({ app: { name: 'Example' }, features: ['api'] });
 const config = mergeConfig(base, { app: { name: 'Production' } });

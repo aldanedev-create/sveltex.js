@@ -16,13 +16,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./argon2": {
+      "types": "./dist/argon2.d.ts",
+      "import": "./dist/argon2.js"
     }
   },
   "scripts": {
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test && tsc -p tests/types/tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs && tsc -p tests/types/tsconfig.json",
     "check": "npm run typecheck && npm test",
     "test:unit": "npm test",
     "test:security": "npm run build && node --test tests/security/*.test.mjs",
@@ -36,6 +40,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.2",
     "@sveltex/shared": "workspace:*"
   },
   "keywords": [
@@ -43,5 +48,8 @@
     "authentication",
     "credentials",
     "sessions"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
 }

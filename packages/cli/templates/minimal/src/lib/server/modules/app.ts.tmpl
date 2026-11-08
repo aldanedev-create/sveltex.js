@@ -1,0 +1,9 @@
+import { defineModule, token } from '@sveltex/core';
+
+export const APP_NAME = token<string>('app.name');
+
+export const appModule = defineModule({
+  name: 'app',
+  providers: [{ provide: APP_NAME, useValue: '{{APP_NAME}}' }],
+  exports: [APP_NAME]
+});

@@ -17,7 +17,7 @@ This is the initial Core implementation (`0.1.0`). It is a working foundation wi
 ## Install and build
 
 ```bash
-pnpm add @sveltexjs/core
+pnpm add @sveltex/core
 ```
 
 For local development:
@@ -38,7 +38,7 @@ import {
   createApplication,
   defineModule,
   token,
-} from '@sveltexjs/core';
+} from '@sveltex/core';
 
 interface Logger {
   info(message: string): void;
@@ -83,14 +83,14 @@ logger.info('SvelteX Core is running');
 await app.stop();
 ```
 
-In a SvelteKit server, the future `@sveltexjs/sveltekit` package will own the bridge from SvelteKit's `handle` hook and request event into Core. Do not create a second router or SSR layer in Core.
+In a SvelteKit server, the future `@sveltex/sveltekit` package will own the bridge from SvelteKit's `handle` hook and request event into Core. Do not create a second router or SSR layer in Core.
 
 ## Modules
 
 Modules are explicit, immutable descriptors. There is no filesystem scanning, dynamic plugin loader, or automatic discovery.
 
 ```ts
-import { defineModule, token } from '@sveltexjs/core';
+import { defineModule, token } from '@sveltex/core';
 
 interface Database {
   query(sql: string): Promise<unknown>;
@@ -227,7 +227,7 @@ A startup failure moves the app to `failed`. The lifecycle manager attempts to s
 ## Configuration
 
 ```ts
-import { defineConfig } from '@sveltexjs/core';
+import { defineConfig } from '@sveltex/core';
 
 export default defineConfig({
   name: 'taskflow',

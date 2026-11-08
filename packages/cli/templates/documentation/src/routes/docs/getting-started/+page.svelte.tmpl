@@ -1,0 +1,31 @@
+<svelte:head>
+  <title>Getting started - {{APP_NAME}}</title>
+</svelte:head>
+
+<h1>Getting started</h1>
+
+<p>
+  This documentation starter is plain SvelteKit source. Install dependencies
+  and start the development server:
+</p>
+
+<pre><code>{{INSTALL_COMMAND}}
+{{DEV_COMMAND}}</code></pre>
+
+<p>Edit the pages under src/routes/docs/ to write your own content.</p>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    color-scheme: light dark;
+    line-height: 1.7;
+  }
+
+  pre {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    overflow-x: auto;
+  }
+</style>

@@ -1,7 +1,7 @@
 {
   "project": "SvelteX",
-  "status": "Stage 1\u20133 implementation baseline; Stage 4 and CLI deferred",
-  "document_count": 32,
+  "status": "All five stages implemented and verified (450 runtime tests); Stage 5 CLI built last",
+  "document_count": 33,
   "documents": [
     "README.md",
     "docs/architecture/application-lifecycle.md",
@@ -32,9 +32,10 @@
     "docs/testing/testing-strategy.md",
     "docs/vision.md",
     "docs/specification.md",
+    "packages/cli/README.md",
     "packages/database/README.md",
     "packages/auth/README.md",
     "docs/testing/verification-report.md"
   ],
-  "note": "Core and SvelteKit are preserved. Stage 1\u20133 packages now have initial implementations, unit tests, security tests, and public API type tests. Production certification still requires full pnpm CI and real provider/fixture integration tests."
+  "note": "Core and SvelteKit are preserved. All five stages are implemented and verified: real SQLite, Argon2id, Redis cache/session, Stage 4 process-local adapters, and the Stage 5 sveltex CLI (built last) all ship with integration or runtime tests. 450 runtime tests, 71 security tests and 16 type-test projects pass under pnpm check. Generated apps never depend on the CLI at runtime; PostgreSQL/MySQL, WebSocket/SSE, S3 and SMTP/HTTP adapters are documented as unshipped; no fake provider is advertised."
 }

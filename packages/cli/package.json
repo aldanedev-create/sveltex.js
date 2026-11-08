@@ -1,0 +1,56 @@
+{
+  "name": "sveltex",
+  "version": "0.1.0",
+  "description": "Official development CLI for SvelteX: project creation, integrations, generators, and diagnostics",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "sveltex": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/unit/*.test.mjs tests/commands/*.test.mjs tests/generators/*.test.mjs tests/package-managers/*.test.mjs tests/diagnostics/*.test.mjs tests/security/*.test.mjs tests/e2e/*.test.mjs && tsc -p tests/types/tsconfig.json",
+    "test:unit": "npm test",
+    "test:security": "npm run build && node --test tests/security/*.test.mjs",
+    "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
+    "test:coverage": "npm run build && node --experimental-test-coverage --test"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "sveltex",
+    "sveltekit",
+    "cli",
+    "scaffolding",
+    "generator"
+  ],
+  "dependencies": {
+    "@sveltex/config": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
+}

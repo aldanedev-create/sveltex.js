@@ -1,0 +1,72 @@
+<script lang="ts">
+  import type { Snippet } from 'svelte';
+
+  interface Props {
+    children: Snippet;
+  }
+
+  let { children }: Props = $props();
+
+  const pages = [
+    { href: '/docs/getting-started', label: 'Getting started' },
+    { href: '/docs/architecture', label: 'Architecture' }
+  ];
+</script>
+
+<div class="docs">
+  <aside>
+    <p class="label">Documentation</p>
+    <nav aria-label="Documentation pages">
+      {#each pages as page (page.href)}
+        <a href={page.href}>{page.label}</a>
+      {/each}
+    </nav>
+  </aside>
+  <article>
+    {@render children()}
+  </article>
+</div>
+
+<style>
+  .docs {
+    display: grid;
+    grid-template-columns: minmax(10rem, 14rem) 1fr;
+    gap: clamp(1rem, 4vw, 3rem);
+    max-width: 58rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3rem);
+  }
+
+  @media (max-width: 40rem) {
+    .docs {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  article {
+    min-width: 0;
+    line-height: 1.7;
+  }
+</style>

@@ -1,0 +1,28 @@
+<script lang="ts">
+  import Shell from '$lib/components/Shell.svelte';
+</script>
+
+<svelte:head><title>Reports - {{APP_NAME}}</title></svelte:head>
+
+<main>
+  <Shell title="Reports" section="/reports" />
+  <p>
+    UI shell only. No data source is connected, so no figures are shown. Connect
+    a database integration before rendering real reports.
+  </p>
+</main>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    color-scheme: light dark;
+    line-height: 1.6;
+  }
+
+  main {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3rem);
+  }
+</style>

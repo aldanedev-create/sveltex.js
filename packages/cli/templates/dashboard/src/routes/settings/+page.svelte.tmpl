@@ -1,0 +1,28 @@
+<script lang="ts">
+  import Shell from '$lib/components/Shell.svelte';
+</script>
+
+<svelte:head><title>Settings - {{APP_NAME}}</title></svelte:head>
+
+<main>
+  <Shell title="Settings" section="/settings" />
+  <p>
+    UI shell only. No preferences are persisted because no storage or database
+    integration is installed in this starter.
+  </p>
+</main>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    color-scheme: light dark;
+    line-height: 1.6;
+  }
+
+  main {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3rem);
+  }
+</style>

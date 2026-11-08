@@ -1,5 +1,5 @@
 {
-  "name": "@sveltexjs/shared",
+  "name": "@sveltex/shared",
   "version": "0.1.0",
   "description": "Shared, framework-agnostic types and utilities used across SvelteX packages",
   "license": "MIT",

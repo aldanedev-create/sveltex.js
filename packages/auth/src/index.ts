@@ -1,4 +1,4 @@
-import { cloneData, deepFreeze } from '@sveltexjs/shared';
+import { cloneData, deepFreeze } from '@sveltex/shared';
 export interface AuthUser { readonly id: string; readonly email: string; readonly roles?: readonly string[]; readonly [key: string]: unknown; }
 export interface CredentialUserStore<User extends AuthUser = AuthUser> {
   findByEmail(normalizedEmail: string): Promise<(User & { readonly passwordHash: string }) | undefined>;

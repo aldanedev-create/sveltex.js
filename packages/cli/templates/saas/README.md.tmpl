@@ -1,0 +1,26 @@
+# {{APP_NAME}} (saas)
+
+SaaS application foundation. This starter wires the integrations it actually
+installs and states clearly what is NOT configured.
+
+Included:
+
+- A real, process-local in-memory job queue example in src/lib/server/jobs.ts.
+- A GET /health endpoint.
+- Standard Schema validation package.
+
+NOT included and NOT implied:
+
+- Authentication, user accounts, roles, sessions, or any login flow.
+- Durable database persistence.
+- Billing, subscriptions, or payments of any kind.
+- Any external provider adapter.
+
+The in-memory queue is process-local and not durable. Do not deploy multiple
+instances against it. Add auth/database/cache/session integrations explicitly
+when you are ready to configure them.
+
+Run:
+
+    {{INSTALL_COMMAND}}
+    {{DEV_COMMAND}}

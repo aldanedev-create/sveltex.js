@@ -1,5 +1,13 @@
 # Package Architecture
 
+> **Historical draft.** This early architecture sketch uses a different stage
+> numbering and package layout than the shipped repository (for example, it
+> places the CLI in "Stage 3" and lists packages under `integrations/`). It is
+> preserved as a design record, not as current status. The authoritative
+> package inventory, five-stage order, and CLI specification are in
+> [`docs/specification.md`](../specification.md); current delivery status is in
+> [`docs/audit/README.md`](../audit/README.md).
+
 ## Planned monorepo
 
 ```text

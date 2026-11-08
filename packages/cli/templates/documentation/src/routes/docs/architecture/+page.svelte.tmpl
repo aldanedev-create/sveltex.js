@@ -1,0 +1,33 @@
+<svelte:head>
+  <title>Architecture - {{APP_NAME}}</title>
+</svelte:head>
+
+<h1>Architecture</h1>
+
+<p>
+  SvelteKit owns routing, rendering, and the build. SvelteX owns application
+  composition: modules, dependency injection, and lifecycle.
+</p>
+
+<ul>
+  <li>src/lib/server/sveltex.ts creates the application instance.</li>
+  <li>src/lib/server/modules/index.ts registers server modules.</li>
+  <li>src/hooks.server.ts composes the SvelteX handle with SvelteKit sequence().</li>
+  <li>sveltex.config.ts holds the canonical application configuration.</li>
+</ul>
+
+<p><a href="{{DOCS_URL}}" rel="noreferrer">Official SvelteX documentation</a></p>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    color-scheme: light dark;
+    line-height: 1.7;
+  }
+
+  a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+</style>

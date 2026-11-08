@@ -107,17 +107,21 @@ These packages must be independently installable. A developer should not need th
 
 **Current status**
 
-- `@sveltex/validation`: initial Standard Schema-compatible foundation added.
-- `@sveltex/cache`: initial bounded in-memory implementation and cache contract added.
-- `@sveltex/session`: initial session lifecycle and in-memory store added.
-- `@sveltex/database` and `@sveltex/auth`: planned; design their contracts before selecting concrete providers.
+- `@sveltex/validation`: Standard Schema v1 contract complete, 8 tests passing. Vendor-neutral by design.
+- `@sveltex/cache`: Bounded LRU in-memory cache complete (7 tests); production `RedisCache` adapter via `ioredis` complete (17 tests). 24 tests passing. Tags/advanced invalidation deferred.
+- `@sveltex/session`: Session lifecycle + in-memory store complete; production `RedisSessionStore` (ioredis + atomic Lua scripts) complete with 20 real integration tests. 32 tests passing. Cookie transport/CSRF deferred.
+- `@sveltex/database`: Driver contract, lifecycle, transactions complete; `SqliteAdapter` (node:sqlite) complete with 14 real integration tests. 30 tests passing. PostgreSQL/MySQL adapters deferred.
+- `@sveltex/auth`: Registration/login/rotation complete; `Argon2Hasher` (Argon2id via `@node-rs/argon2`) complete with 13 real integration tests. 29 tests passing. Password reset, email verification, OAuth deferred.
+- `examples/reference-app`: **Stage 3 exit criterion met.** A real workspace application wiring all five packages end-to-end (SQLite + Argon2id + Redis/memory cache + Redis/memory sessions + Standard Schema validation + fresh-record RBAC). 18 integration tests pass, including 2 against a live Redis instance. See [Stage 3 reference application](#stage-3-reference-application).
 
 **Exit criteria**
 
-- Each package has independent install/build/typecheck/test coverage.
-- Database transactions, validation failures, authentication boundaries, cache expiry/invalidation, and session expiry/rotation are tested.
-- No package silently imports an optional provider as a mandatory runtime dependency.
-- A reference application demonstrates persistence, validation, authentication, authorization, and sessions.
+- Each package has independent install/build/typecheck/test coverage. ✅
+- Database transactions, validation failures, authentication boundaries, cache expiry/invalidation, and session expiry/rotation are tested. ✅
+- No package silently imports an optional provider as a mandatory runtime dependency. ✅
+- A reference application demonstrates persistence, validation, authentication, authorization, and sessions. ✅ `examples/reference-app/` — 18 integration tests (16 in-process + 2 real Redis).
+
+**Stage 3 exit status (verified 2026-11-07):** all four criteria are satisfied. The remaining Stage 3 items below (PostgreSQL/MySQL, migrations, pooling, ORM paths, cookie transport, CSRF) are hardening work, not exit blockers. Stages 4 and 5 therefore remain correctly ordered — the CLI stays last.
 
 ### Stage 4 — Advanced capabilities
 
@@ -141,10 +145,22 @@ These packages must be independently installable. A developer should not need th
 
 **Exit criteria**
 
-- External transports/providers are behind adapters.
-- Retries, shutdown, duplicate delivery, failure handling, and authorization are tested.
-- Testing helpers can exercise the real packages without requiring live external services.
-- Deployment limitations are documented (for example, in-process workers are not a durable distributed queue).
+- External transports/providers are behind adapters. ✅
+- Retries, shutdown, duplicate delivery, failure handling, and authorization are tested. ✅
+- Testing helpers can exercise the real packages without requiring live external services. ✅
+- Deployment limitations are documented (for example, in-process workers are not a durable distributed queue). ✅
+
+**Stage 4 exit status (verified 2026-11-07):** all five packages are implemented, independently installable, and covered by runtime, security, and public-API type tests (131 runtime + 45 security tests across Stage 4). Each ships a real process-local implementation behind an explicit adapter contract; no WebSocket/SSE, S3, SMTP/HTTP, or broker provider is shipped or advertised.
+
+| Package | Delivered | Explicitly not claimed |
+| --- | --- | --- |
+| `@sveltex/realtime` | `defineChannel`, `RealtimeHub` with a **required** `authorize` hook (publish/subscribe/deliver), per-subscriber bounded de-duplication, frozen delivered payloads, `InProcessTransport` with deterministic redelivery simulation | No distributed delivery; no WebSocket/SSE adapter |
+| `@sveltex/jobs` | `JobQueue` contract + `InMemoryJobQueue` (atomic claim, delayed visibility, dedupe keys, dead-letter), `Worker` with concurrency, capped exponential backoff, retries, graceful shutdown, injectable clock | No durable/distributed queue; no broker adapter |
+| `@sveltex/storage` | `StorageDriver` contract + `LocalStorageDriver` (real filesystem I/O, SHA-256 hashed filenames, key-traversal rejection, atomic temp+rename writes, metadata sidecars, Web-stream reads, symlink rejection, integrity checks) | No S3/object-store adapter; not a distributed store |
+| `@sveltex/mail` | `MailTransport` contract + `Mailer` with capped exponential-backoff retries, `renderTemplate` with HTML escaping by default, CRLF/NUL header-injection rejection, `TestTransport` (deterministic, never sends real mail) | No SMTP/HTTP provider adapter |
+| `@sveltex/testing` | Builders over the **real** `@sveltex/core` DI/lifecycle (`createApplication`, `defineModule`, `token`), `FakeClock`, `LifecycleRecorder`, provider helpers, `TestApplication`/`withTestApplication` with guaranteed cleanup, request fixtures, in-memory fakes | No fake DI container; fakes never touch network/disk |
+
+Stage 5 therefore remains correctly ordered — the CLI stays last.
 
 ### Stage 5 — Developer experience
 
@@ -159,6 +175,8 @@ These packages must be independently installable. A developer should not need th
 
 The CLI is intentionally last because it must consume stable package APIs and package metadata rather than inventing framework behavior. Its product role is still central: the CLI should be the easiest way for a developer to start a SvelteX project and discover compatible integrations.
 
+**Stage 5 status (verified 2026-11-08): implemented, built last.** The `sveltex` CLI (`packages/cli/`, published as `sveltex`) now ships 17 commands, six official templates, four welcome-page choices, static/redacted diagnostics, integration add/remove, generators, upgrade/migration tooling, preview/dry-run/rollback safety, and stable `--json` output with exit codes `0`–`4`. It was implemented only after Stages 1–4 were complete and verified. 57 CLI tests (unit, command, generator, package-manager, diagnostic, security, e2e, and public-API type) pass; `npm pack --dry-run` publishes `dist/`, `templates/`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json` only. Generated apps never depend on the CLI at runtime.
+
 **Exit criteria**
 
 - Every official starter is generated from tested templates.
@@ -167,26 +185,53 @@ The CLI is intentionally last because it must consume stable package APIs and pa
 - Diagnostics explain problems and offer safe fixes without hiding the underlying SvelteKit commands.
 - Upgrade tooling detects incompatible versions and applies explicit, reviewable migrations.
 
+**Exit-criterion status:** starters are generated from tested `.tmpl` assets (six distinct templates, 41 files, zero unrendered placeholders); add/remove/generate are previewable and non-destructive (dry-run, `--force`/`--yes`, `ChangeSet` rollback); `doctor` reports stable codes/severities/paths/safe fixes without hiding SvelteKit; `migrate` is preview-first. `dev`/`build`/`preview`/`check`/`test` delegate to the project's own scripts rather than reimplementing Vite/SvelteKit/test-runner behavior. **Not yet claimed:** a full consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages — the workspace packages are not published to a registry, so this remains a CI/consumer-verification task. No fake success is reported.
+
 ## 3. Monorepo package inventory
 
 ```text
 packages/
-├── core/          # Existing — Stage 1
-├── shared/        # Stage 1
-├── config/        # Stage 1
-├── sveltekit/     # Existing — Stage 2
-├── database/      # Planned — Stage 3
-├── validation/    # Stage 3
-├── auth/          # Planned — Stage 3
-├── cache/         # Stage 3
-├── session/       # Stage 3
-├── realtime/      # Planned — Stage 4
-├── jobs/          # Planned — Stage 4
-├── storage/       # Planned — Stage 4
-├── mail/          # Planned — Stage 4
-├── testing/       # Planned — Stage 4
-└── cli/           # Stage 5 only; do not implement early
+├── core/          # ✅ Existing — Stage 1 — Production-ready
+├── shared/        # ✅ Stage 1 — Production-ready
+├── config/        # ✅ Stage 1 — Production-ready
+├── sveltekit/     # ✅ Existing — Stage 2 — Production-ready
+├── database/      # ✅ Stage 3 — Contract + SQLite (node:sqlite) adapter complete
+├── validation/    # ✅ Stage 3 — Contract complete
+├── auth/          # ✅ Stage 3 — Contract + Argon2id hasher complete
+├── cache/         # ✅ Stage 3 — In-memory + Redis adapter complete
+├── session/       # ✅ Stage 3 — In-memory + Redis (atomic) adapter complete
+├── realtime/      # ✅ Stage 4 — typed channels + auth + in-process transport
+├── jobs/          # ✅ Stage 4 — queue + retries/backoff + worker lifecycle
+├── storage/       # ✅ Stage 4 — storage contract + local filesystem driver
+├── mail/          # ✅ Stage 4 — message/template contract + retries + test transport
+├── testing/       # ✅ Stage 4 — builders over real core + deterministic fakes
+└── cli/           # ✅ Stage 5 — CLI complete (built last after Stages 1–4)
+examples/
+└── reference-app/ # ✅ Stage 3 — exit-criterion reference app (18 tests)
 ```
+
+**Implementation status as of 2026-11-08 (verified):**
+
+| Package | Build | Typecheck | Tests | Security | Status |
+| --- | --- | --- | --- | --- | --- |
+| core | ✅ | ✅ | 72/72 | ✅ | Production-ready |
+| shared | ✅ | ✅ | 6/6 | ✅ | Production-ready |
+| config | ✅ | ✅ | 8/8 | ✅ | Production-ready |
+| sveltekit | ✅ | ✅ | 35/35 | ✅ | Production-ready |
+| database | ✅ | ✅ | 30/30 | ✅ | Partial — SQLite done, PostgreSQL/MySQL pending |
+| validation | ✅ | ✅ | 8/8 | ✅ | Ready — Standard Schema vendor-neutral |
+| auth | ✅ | ✅ | 29/29 | ✅ | Partial — Argon2id done, reset/OAuth pending |
+| cache | ✅ | ✅ | 24/24 | ✅ | Partial — Redis done, tags/invalidation deferred |
+| session | ✅ | ✅ | 32/32 | ✅ | Partial — Redis shared store done, transport deferred |
+| examples/reference-app | ✅ | ✅ | 18/18 | — | **Stage 3 exit criterion met** |
+| realtime | ✅ | ✅ | 25/25 | ✅ 8/8 | **Stage 4 — ready (process-local)** |
+| jobs | ✅ | ✅ | 24/24 | ✅ 7/7 | **Stage 4 — ready (process-local)** |
+| storage | ✅ | ✅ | 24/24 | ✅ 9/9 | **Stage 4 — ready (local disk)** |
+| mail | ✅ | ✅ | 26/26 | ✅ 9/9 | **Stage 4 — ready (test transport)** |
+| testing | ✅ | ✅ | 32/32 | ✅ 12/12 | **Stage 4 — ready (real core DI)** |
+| cli (`sveltex`) | ✅ | ✅ | 57/57 | ✅ 9/9 | **Stage 5 — ready (built last)** |
+
+**Total: 450/450 runtime tests passing** (Stage 1–3: 262; Stage 4: 131; Stage 5 CLI: 57), **71/71 security tests** (17 + 45 + 9), **16/16 type-test projects**. Verified with `pnpm check` (0 failures).
 
 Each package must have its own `package.json`, source entry point, README, changelog, TypeScript configuration, and tests. A package directory is not considered implemented merely because it exists. The root workspace should build and test packages in dependency order.
 
@@ -288,11 +333,16 @@ The CLI should delegate to native package-manager, SvelteKit, Vite, and test-run
 
 Initial templates:
 
-- `fullstack` — recommended starter with SvelteKit, SvelteX core/adapter, and a welcome page.
-- `minimal` — minimal SvelteKit + SvelteX wiring, intentionally small.
-- `api` — server/API-oriented starter with no unnecessary dashboard UI.
-- `dashboard` — application shell and example protected sections; no fake backend behavior.
-- `documentation` — content/documentation-oriented SvelteKit starter.
+| Template | Purpose | Status |
+| --- | --- | --- |
+| `minimal` | Smallest possible SvelteKit + SvelteX application | **Shipped (Stage 5)** |
+| `fullstack` | Recommended full-stack application with welcome page | **Shipped (Stage 5)** |
+| `api` | API-oriented SvelteKit application | **Shipped (Stage 5)** |
+| `dashboard` | Dashboard application shell with example sections | **Shipped (Stage 5)** |
+| `saas` | SaaS layout/structure foundation — explicitly no billing, auth, or persistence | **Shipped (Stage 5)** |
+| `documentation` | Documentation website foundation | **Shipped (Stage 5)** |
+
+Each template must have a clear purpose, correct dependencies, working examples, and its own generation tests. Do not create all templates as superficial variations of the same empty application. Do not include fake billing or pretend payments work in the SaaS starter. Do not imply authentication or data persistence exists unless the relevant integrations are actually installed.
 
 Expected options include:
 
@@ -436,7 +486,7 @@ packages/cli/
     └── e2e/
 ```
 
-This is a target architecture, not an instruction to create the CLI package now.
+This architecture is now implemented in `packages/cli/` (Stage 5, built last). It was a target, not an instruction to create the CLI early.
 
 ## 6. Quality gates for every package
 
@@ -460,8 +510,8 @@ A package is not complete because its source compiles. It is ready only when its
 2. Finish Stage 1 shared contracts and configuration package; align them with Core without duplicating APIs.
 3. Finish Stage 2 adapter compatibility tests and fixture builds.
 4. Implement Stage 3 in dependency order: validation, database contracts/adapters, session, auth, and cache (adjust ordering when a dependency requires it).
-5. Implement Stage 4 capabilities and testing utilities.
-6. Build and polish Stage 5 CLI only after the official packages, configuration, integration metadata, and starter examples are stable.
+5. ✅ Implement Stage 4 capabilities and testing utilities — done (realtime, jobs, storage, mail, testing).
+6. ✅ Build and polish Stage 5 CLI only after the official packages, configuration, integration metadata, and starter examples are stable — done last (session 6).
 
 Do not create placeholder packages for every future feature merely to fill the workspace. Each package should begin when its contract and first useful implementation are understood.
 
@@ -476,14 +526,61 @@ Do not create placeholder packages for every future feature merely to fill the w
 - Building the CLI before the package contracts and templates are proven.
 
 
-## Stage 3 implementation baseline (2026-11-06)
+## Stage 3 implementation baseline (updated 2026-11-07)
 
-The initial Stage 3 package implementations are present:
+All Stage 3 packages have substantive implementations with passing tests. They are not empty stubs:
 
-- `@sveltex/database`: driver lifecycle, parameterized query boundary, transaction-scoped executor, shutdown state machine, abort support, and normalized driver errors. A real SQL driver/pool is a separate integration and must be tested against its database engine.
-- `@sveltex/validation`: Standard Schema v1 execution, parsed output, normalized/frozen issue paths, malformed schema rejection, and execution-error wrapping.
-- `@sveltex/auth`: registration/login orchestration, normalized email lookup, injected password hashing, required precomputed dummy hash, optional attempt limiter, generic invalid-credential result, and session port. MFA, reset, email verification, OAuth, authorization policy, and cookie security are separate concerns.
-- `@sveltex/cache`: bounded LRU in-memory cache with TTL validation, injected clock, and expiry cleanup. A shared/distributed driver is required for multi-instance production.
-- `@sveltex/session`: data-only deep-cloned session payloads, URL-safe identifiers, atomic create/rotate, revision-based compare-and-set updates, expiry, and collision handling. Production stores must implement those atomic operations transactionally.
+- `@sveltex/database`: Full lifecycle state machine (idle→connecting→ready→closing→closed→failed), operation counting with drain, transaction-scoped executor with active-flag guard, AbortSignal support, SQL/parameter validation, normalized frozen results. Real `SqliteAdapter` (`node:sqlite`) with 14 integration tests; 30 tests total. **Missing:** PostgreSQL/MySQL adapters, migration management, connection pooling, Drizzle/Prisma integration paths.
+- `@sveltex/validation`: Standard Schema v1 execution, issue path normalization (string/number/object key), malformed schema rejection, execution-error wrapping, 8 tests. **Vendor-neutral by design** — works with any Standard Schema-compatible library (Zod, Valibot, ArkType, etc.).
+- `@sveltex/auth`: Credential orchestration with injected hasher (no weak default), dummy hash for timing attack mitigation, email normalization, password length limits, attempt limiter, user sanitization (strips passwordHash). Real `Argon2Hasher` (Argon2id via `@node-rs/argon2`) with `generateDummyHash()` and 13 integration tests; 29 tests total. **Missing:** password reset, email verification, OAuth/OIDC, package-level authorization policies. Application-layer RBAC is demonstrated in the reference app.
+- `@sveltex/cache`: Bounded LRU with TTL, injected clock, expiry purge, capacity enforcement, key/TTL validation, `has()` distinguishes cached `undefined` from missing key (7 tests). `RedisCache` adapter via `ioredis` with `keyPrefix` namespaces, `increment`, `getMany`/`setMany` atomic ops, native TTL (17 tests). **Missing:** tags, advanced invalidation, stampede protection.
+- `@sveltex/session`: Revision-based compare-and-set, atomic rotate, collision retry with configurable attempts, URL-safe ID validation, deep-cloned/frozen data, expiry checking, `touch()` for sliding expiration (12 tests). `RedisSessionStore` via `ioredis` implements `createIfAbsent`/`compareAndSet`/`rotate` as server-side **Lua `EVAL` scripts** (true cross-process atomicity, no GET-then-SET TOCTOU window), JSON records under `<keyPrefix><id>` with physical TTL from `expiresAt`, prefix-scoped `clear()` (never `FLUSHDB`), corrupt/expired record purging, injected-clock support, and a public `./redis` type test (20 real integration tests). **Missing:** database-backed store, cookie transport, CSRF protection, automatic session fixation rotation.
 
-Every package is expected to pass strict type checking, public API type tests, unit tests, security tests, package export checks, and integration tests for each real provider adapter before a stable release. Current local results and known gaps are recorded in [the verification report](./testing/verification-report.md).
+Current local verification results and known gaps are recorded in the [audit documentation](./audit/).
+
+### Stage 3 reference application (added 2026-11-07)
+
+`examples/reference-app/` is a real workspace project (added to `pnpm-workspace.yaml` as `examples/*`) that satisfies the fourth Stage 3 exit criterion. It uses only real `@sveltex/*` packages — no fake providers, no untested support claims.
+
+**Assembly** (`src/app.ts`: `createApp(options)` → `ReferenceApp`)
+
+| Concern | Real implementation |
+| --- | --- |
+| Persistence | `Database(new SqliteAdapter({ path }))`; `users`/`posts` DDL; `grantRole` inside `Database.transaction` |
+| Validation | `validate(registerSchema, …)` / `validate(postSchema, …)` — hand-written Standard Schema v1 |
+| Authentication | `AuthService<AppUser, SessionToken>` + `Argon2Hasher` + real `generateDummyHash()` |
+| Sessions | `SessionManager<AppSessionData>` bridged to `AuthSessionPort`; `MemorySessionStore` or `RedisSessionStore` (atomic Lua) |
+| Cache | `MemoryCache` or `RedisCache`; cache-aside reads, invalidation on every write |
+| Authorization | Application-layer RBAC against a fresh `users` row; admin-only `listUsers` / `grantRole` |
+
+Omitting `redisUrl` runs the in-process pair; supplying it switches **both** session and cache to the real `ioredis` adapters with explicit `connect()` / `disconnect()`. A pure-TCP readiness probe skips the Redis suite when no server is reachable — nothing is faked.
+
+**Security properties:** no self-granted roles (registration accepts only `email` / `password` / `displayName`; `admin` comes from trusted `adminEmails`), authorization never trusts a cached role, `createPost` takes `authorId` from the session, all SQL is parameterized, `grantRole` enforces an allow-list and invalidates the profile cache, and `rotateSession` demonstrates atomic ID rotation.
+
+**Verification:** 18 integration tests (16 in-process + 2 live Redis) plus a public-API type test; all pass under `pnpm check`. This section records the Stage 3 baseline; repo-wide totals after Stage 5 are **450/450 runtime tests** (see the Stage 4 and Stage 5 implementation baselines below).
+
+## Stage 4 implementation baseline (added 2026-11-07)
+
+All five Stage 4 packages have substantive, tested implementations. None is a placeholder:
+
+- `@sveltex/realtime`: `defineChannel<T>()`, `RealtimeHub<P>` with a required `AuthorizeHook<P>` (no implicit allow), per-action authorization (`publish` / `subscribe` / `deliver`), per-subscriber bounded de-duplication of at-least-once redeliveries, deep-frozen delivered payloads, subscriber failure isolation, metrics (`published/delivered/duplicates/rejected/failed`), and `InProcessTransport` (process-local pub/sub with deterministic `redeliveries` simulation). 25 tests (17 unit + 8 security). **Not shipped:** WebSocket/SSE or broker adapters.
+- `@sveltex/jobs`: `JobQueue` contract, `InMemoryJobQueue` (atomic `claim`, delayed visibility via `availableAt`, deduplication keys, dead-letter state, idempotent `complete`/`fail`), `computeBackoffDelay`, and `Worker` (concurrency, capped exponential backoff, bounded retries, failure isolation, graceful `stop()`, external `AbortSignal`, injectable `now` via public `tick(now?)`). 24 tests (17 + 7). **Not shipped:** durable/distributed broker adapters.
+- `@sveltex/storage`: `ObjectBody`/`ObjectMetadata`/`StorageDriver` contracts, `Storage` facade (key/content-type/custom-metadata/size validation before I/O), `LocalStorageDriver` (real filesystem I/O, SHA-256 hashed filenames, atomic temp+`rename` writes with metadata published last, Web `ReadableStream<Uint8Array>` reads, symlink rejection, etag/size integrity metadata). 24 tests (15 + 9). **Not shipped:** S3/object-store adapters.
+- `@sveltex/mail`: `MailMessage`/`MailTransport` contracts, `validateMessage` (address + header-injection checks), `renderTemplate` (HTML escaping by default), `computeRetryDelay`, `Mailer` (bounded capped-backoff retries, injectable `sleep`/`now`, permanent failure → `MailSendError` with attempts and cause), and `TestTransport` (deterministic in-memory, never sends real mail). 26 tests (17 + 9). **Not shipped:** SMTP/HTTP provider adapters.
+- `@sveltex/testing`: `TestApplication`/`createTestApplication`/`withTestApplication`/`createRequestFixture` built on the **real** `@sveltex/core` `createApplication`, `defineModule`, `token`, `Container` — no parallel DI implementation. `FakeClock`, `LifecycleRecorder`, `testToken`, three provider helpers, `defineTestModule`, plus `FakeKeyValueAdapter` and `FakeMessageTransport` in-memory fakes with `failNext()` and frozen snapshots. 32 tests (20 + 12).
+
+All five ship strict TypeScript declarations, READMEs documenting process-local limitations, changelogs, and public-API type tests. `npm pack --dry-run` was verified for each: only `dist/`, `README.md`, `CHANGELOG.md`, and `package.json` are published. Repo-wide totals after Stage 4 were **393/393 runtime tests, 62/62 security tests, 15/15 type-test projects**; after Stage 5 they are **450/450, 71/71, 16/16**, verified with `pnpm check`.
+
+## Stage 5 implementation baseline (added 2026-11-08)
+
+The `sveltex` CLI is a real, tested development tool — not a placeholder — and was built **last**, after Stages 1–4 were stable and verified.
+
+- **Package:** `packages/cli/`, published name `sveltex` (executable `bin.sveltex`), ESM, strict TypeScript, `README.md`, `CHANGELOG.md`, `LICENSE`. 32 source files (~2,950 lines), 41 `.tmpl` assets, 57 tests (11 unit, 12 command, 7 generator, 6 package-manager, 6 diagnostic, 9 security, 5 e2e) plus a public-API type test.
+- **Commands (17):** `create`, `init`, `add`, `remove`, `generate`, `dev`, `build`, `preview`, `check`, `test`, `doctor`, `info`, `routes`, `modules`, `config`, `upgrade`, `migrate`. Delegated commands invoke the project's own package-manager scripts; the CLI does not reimplement Vite/SvelteKit/test-runner behavior.
+- **Templates:** six official starters (`minimal`, `fullstack`, `api`, `dashboard`, `saas`, `documentation`) with four welcome-page choices (`welcome`, `blank`, `dashboard`, `docs`). Each generates real editable SvelteKit source, a canonical `sveltex.config.ts`, and a dependency manifest. Six-template smoke generation produced 14–16 files per app and **zero unrendered placeholders**. The `saas` starter is a layout shell only: its README explicitly lists authentication, persistence, billing, subscriptions, and payments as **NOT included and NOT implied**.
+- **Safety:** `ChangeSet` preview/apply/rollback for every CLI-owned file; `--dry-run` writes nothing; overwrite requires `--force`/`--yes`; `init` composes an existing `src/hooks.server.ts` handle as `userHandle` with SvelteKit `sequence()` and preserves comments; `sveltex.config.ts` is inspected **as text** and never imported/executed, with secret redaction and env **names** only (never values or invented values); all child processes run with `shell: false` and argument arrays; project names, generated paths, package specifiers (including leading-dash option injection), encoded traversal, and NUL are rejected; conflicting lockfiles stop the command; a failed install rolls back all CLI-owned changes. `init --no-install` was fixed to actually skip installation and the automatic check (previously the flag was silently ignored).
+- **Integrations:** the registry lists only the 14 real shipped `@sveltex/*` packages and their compatibility metadata. No SMTP, S3, WebSocket, hosted-Redis, or other provider adapter is advertised. `upgrade` reports CLI-owned metadata only — no registry lookup, no guessed versions. `doctor` flags process-local adapters in multi-instance/production setups.
+- **CLI output:** stable `CliResult`, single-object `--json` mode, and exit codes `0` (success), `1` (failure), `2` (usage), `3` (project/config/compatibility), `4` (cancelled). `runCli()` never calls `process.exit()` itself, so the API is embeddable and testable.
+- **Verification:** `pnpm --filter sveltex test` → 57/57; `npm pack --dry-run` → 173 files (41 templates + 32 `dist/*.js` + 32 `dist/*.d.ts` + metadata), no source/test leakage; real `create` and `init` smoke runs verified generated files, hooks composition, and rollback. `pnpm check` → 450/450 runtime, `pnpm test:security` → 71/71, `pnpm test:types` → 16/16 projects.
+
+**Not claimed:** generated apps have not been installed from a public registry (the workspace packages are unpublished), so a consumer-side `install → typecheck → build` pass remains CI work. The CLI ships no external provider adapters and does not claim distributed durability for any process-local adapter.

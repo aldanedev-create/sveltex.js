@@ -1,0 +1,160 @@
+# SvelteX Security Findings
+
+**Audit date:** 2026-11-08  
+**Auditor:** Security engineer
+
+---
+
+## Security finding summary
+
+| ID | Severity | Area | Finding | Status |
+| --- | --- | --- | --- | --- |
+| SEC-001 | **Critical (fixed)** | Supply chain | Package name inconsistency (`@sveltexjs/*` vs `@sveltex/*`) caused workspace resolution failure. While not a direct security vulnerability, a broken workspace could mask missing dependencies or force workarounds that bypass dependency verification. | **Fixed** |
+| SEC-002 | Info | Prototype pollution | `cloneData` and `validateConfig` properly reject `__proto__`, `prototype`, `constructor` keys. Symbol keys rejected. Accessors and non-enumerable properties rejected. | **Secure** |
+| SEC-003 | Info | Timing attacks | Auth service verifies a precomputed dummy hash when the user is absent, reducing timing-based user enumeration. Dummy hash length is validated (20–4096 chars). | **Secure** |
+| SEC-004 | Info | Credential exposure | Auth `sanitizeUser` strips `passwordHash` before returning user objects. Results are deep-frozen. | **Secure** |
+| SEC-005 | Info | SQL injection | Database package never constructs SQL from user input. Parameterized queries only. SQL length validated (max 1,000,000 chars). Parameter types validated. | **Secure** |
+| SEC-006 | Info | Session fixation | Session rotation is implemented with atomic compare-and-set. However, rotation is not automatic — applications must call `rotate()` explicitly after privilege changes. | **Secure (with caveat)** |
+| SEC-007 | Low | Rate limiting | Auth attempt limiter is optional (`options.limiter`). Production deployments must supply one; no default rate limiting is provided. | **Documented** |
+| SEC-008 | Low | CSRF | Session package explicitly excludes cookie transport and CSRF from its scope. Adapter/framework responsibility. | **Documented** |
+| SEC-009 | Low | Secret handling | No secrets are hardcoded. Config metadata rejects functions/symbols/bigints. No environment variable reading in packages (by design). | **Secure** |
+| SEC-010 | Info | Immutable results | All package return values are frozen. Config is deep-frozen. Session records are frozen. Cache entries are immutable. | **Secure** |
+| SEC-011 | Info | AbortSignal | Database operations support AbortSignal for cancellation. Prevents resource exhaustion from long-running queries. | **Secure** |
+| SEC-012 | Low | Input validation | All packages validate input types and lengths (keys, SQL, emails, passwords, TTLs, session IDs). Bounds checking is comprehensive. | **Secure** |
+| SEC-013 | Info | Password hashing | `Argon2Hasher` uses Argon2id via `@node-rs/argon2` with sensible memory/time/parallelism defaults. Salts are unique per hash. Output is an opaque encoded string. Dummy hash shares the same algorithm/parameters as real hashes, preserving timing-mitigation parity. | **Secure** |
+| SEC-014 | Info | Cache key validation | `RedisCache` validates keys (non-empty, ≤1024 chars) and TTLs (non-negative finite) before issuing any command. Values are JSON-serialized; no user input is interpolated into Redis commands, preventing injection. `clear()` is scoped to the configured `keyPrefix` (avoids global `FLUSHDB`). | **Secure** |
+| SEC-015 | Info | Distributed session atomicity | `RedisSessionStore` implements `createIfAbsent`, `compareAndSet`, and `rotate` as server-side **Lua scripts** (`EVAL`), so the read-validate-write sequence is atomic across processes. This closes the TOCTOU window that a naive GET-then-SET store would expose (session resurrection / lost concurrent updates / rotation collisions). All values are JSON-serialized with no command interpolation; `clear()` is `SCAN`+`DEL` scoped to `keyPrefix` (never `FLUSHDB`); corrupt or logically expired records are purged on read; returned data is deeply cloned and frozen. | **Secure** |
+| SEC-016 | Info | Reference-app authorization boundary | `examples/reference-app` rejects client-supplied `roles` on registration (self-privilege-escalation); `admin` is granted only via trusted `adminEmails` bootstrap config. Every privileged call resolves the principal from a live session **plus a fresh `users` row** — never a cached or client-supplied role. `createPost` derives `authorId` from the session (payload `authorId` ignored); all SQL is parameterized; `grantRole` uses an allow-list and invalidates the cached profile; `rotateSession` is atomic; session IDs are validated before use. Covered by 18 integration tests. | **Secure** |
+| SEC-017 | Info | Realtime authorization boundary | `RealtimeHub` requires an explicit `authorize` hook (no implicit allow) and evaluates `deliver` **per subscriber**; delivered payloads are deep-frozen; channel names reject traversal/control characters; at-least-once redelivery is de-duplicated by a bounded **per-subscriber** id cache (an initial global-set design was corrected). 8 security tests. | **Secure** |
+| SEC-018 | Info | Job queue atomicity and shutdown | `InMemoryJobQueue.claim()` is atomic so at-least-once redelivery cannot double-execute a side effect; `Worker.stop()` drains in-flight handlers while rejecting new work synchronously; retries/backoff are capped and permanent failures dead-letter instead of looping. 7 security tests. | **Secure** |
+| SEC-019 | Info | Storage path traversal and atomicity | User keys reject absolute paths, backslashes, `.`/`..` segments, and control characters, then map to **SHA-256 hex filenames** (user paths never reach the filesystem). Writes are atomic (temp + `rename`, metadata sidecar last); a symlinked `objects/` directory is rejected; reads verify etag/size. 9 security tests. | **Secure** |
+| SEC-020 | Info | Mail header injection and XSS | CRLF/NUL injection is rejected in subjects, names, and headers; `renderTemplate` HTML-escapes interpolated values by default; bounded retries are deterministic and a permanent failure throws `MailSendError` with `attempts` + `cause` — never a false success. `TestTransport` never contacts an external service. 9 security tests. | **Secure** |
+| SEC-021 | Info | Testing helpers do not bypass real core | `@sveltex/testing` delegates to the real `@sveltex/core` DI/lifecycle, so config validation, request-scope enforcement, and lifecycle hook failures are surfaced rather than bypassed. `withTestApplication` guarantees cleanup even on a thrown body; forgotten request scopes are disposed; fakes expose frozen defensive snapshots and reject use after `close()`. 12 security tests. | **Secure** |
+| SEC-022 | Info | CLI never executes project configuration | `sveltex config`/`doctor` inspect `sveltex.config.ts` **as source text** (default-export detection, referenced env names, unsafe-exec markers) and never import or evaluate it. Shape validation is delegated to `@sveltex/config`. Secret values are redacted by key pattern and never printed; only missing env var **names** are reported — the CLI never invents or reads a value. 9 CLI security tests. | **Secure** |
+| SEC-023 | Info | No shell interpretation / option injection | Every child process uses `spawn(..., { shell: false })` with argument arrays only. Project names, script names, and package specifiers are validated against shell metacharacters; a leading-dash specifier such as `--ignore-scripts` is rejected (found by a security test and fixed). Generated paths reject absolute paths, `.`/`..`, encoded traversal (`%2e`/`%2f`/`%5c`), and NUL. | **Secure** |
+| SEC-024 | Info | CLI file mutations are previewable and reversible | Existing files are never overwritten without `--force`/`--yes`; `--dry-run` writes nothing; all CLI-owned edits go through `ChangeSet` with rollback (including partial-failure rollback of already-applied files). `init` composes an existing `src/hooks.server.ts` handle as `userHandle` with SvelteKit `sequence()` instead of replacing it, preserving user comments. A failed install rolls back every generated/edited file. | **Secure** |
+| SEC-025 | Info | No fake integrations or invented compatibility | The CLI integration registry lists only the 14 real shipped `@sveltex/*` packages; no SMTP, S3, WebSocket, hosted-Redis, or other provider adapter is advertised. `upgrade` reports CLI-owned metadata only (no registry lookup, no guessed versions). `doctor` reports missing env **names** only and flags process-local adapters in multi-instance/production setups. The `saas` starter explicitly disclaims auth, persistence, billing, and payments. | **Secure** |
+| SEC-026 | Low (fixed) | `init --no-install` was silently ignored | The flag is globally accepted (used by `create`) but `init` still invoked the package manager, so an explicit "do not install" request executed an install and failed offline, rolling back CLI-owned changes. Fixed: `init` now honors `--no-install`, skips installation and the automatic project check, reports `installed: false`, and lists manual install/check steps. A regression test asserts no runner calls occur. | **Fixed** |
+
+---
+
+## Detailed analysis
+
+### Prototype pollution protection
+
+**Status: Secure**
+
+`@sveltex/shared` `cloneData` function:
+- Rejects `__proto__`, `prototype`, `constructor` as property names (`DATA_UNSAFE_KEY`).
+- Rejects symbol keys (`DATA_SYMBOL_KEY`).
+- Rejects accessors and non-enumerable properties (`DATA_ACCESSOR`).
+- Uses `Reflect.ownKeys` and validates each key type.
+- Uses `Object.defineProperty` with explicit descriptor for each property.
+
+`@sveltex/core` `validateConfig` function:
+- Checks `Object.getPrototypeOf(input) === Object.prototype || null`.
+- Deep clones metadata with the same protections.
+- Rejects functions, symbols, bigints in metadata values.
+
+### Timing attack mitigation
+
+**Status: Secure**
+
+`@sveltex/auth` login flow:
+1. Normalizes and validates email format before any lookup.
+2. If user is absent, verifies password against a precomputed dummy hash.
+3. If `passwordHash` is invalid, also verifies against dummy hash.
+4. Returns generic `undefined` for all failure cases (no user enumeration via return value).
+5. Optional rate limiter consumes attempt before lookup.
+
+**Caveat:** The timing mitigation depends on the injected hasher having consistent verification time. The dummy hash must use the same algorithm/parameters as real hashes. This is documented in the Auth README.
+
+### Credential handling
+
+**Status: Secure**
+
+- Password never appears in return values.
+- `sanitizeUser` destructures user to exclude `passwordHash`.
+- Password length validated on both registration (min/max) and login (max only, to avoid leaking via length error).
+- Hasher output validated (length 20–4096, must be string).
+
+### Session security
+
+**Status: Secure with caveats**
+
+- Session IDs: 16–256 URL-safe characters (`[A-Za-z0-9_-]+`).
+- Default ID generation: `crypto.randomUUID()`.
+- Revision-based optimistic locking prevents concurrent update conflicts.
+- Atomic rotation: old ID invalidated only if revision matches and new ID doesn't collide.
+- Data is deep-cloned on read to prevent external mutation.
+- Expired sessions are deleted on access.
+
+**Caveats:**
+- Rotation is manual, not automatic after login.
+- Cookie transport, signing, and CSRF are adapter responsibilities.
+- `MemorySessionStore` is single-process only.
+
+### Input validation coverage
+
+| Package | Input | Validation |
+| --- | --- | --- |
+| core | Config name | Non-empty string, trimmed |
+| core | Config environment | Optional, non-empty string |
+| core | Config debug | Optional, boolean |
+| core | Config metadata | Plain object, JSON-compatible values only |
+| shared | cloneData input | Plain object/array, no cycles, no accessors, no symbol keys |
+| database | SQL | Non-empty string, max 1,000,000 chars |
+| database | Parameters | Array of null/string/number/boolean/bigint/Date/Uint8Array |
+| auth | Email | String, max 320 chars, regex validation |
+| auth | Password | String, min 12 (registration), max 1024 |
+| auth | Session ID | String, 16–256 chars |
+| cache | Key | Non-empty string, max 1024 chars |
+| cache | TTL | Non-negative finite number |
+| session | ID | String, 16–256 chars, URL-safe |
+| session | TTL | Positive finite number |
+
+### Reference application security review (SEC-016)
+
+**Status: Secure**
+
+`examples/reference-app/` composes all Stage 3 packages. The integration boundary — where a real application could reintroduce vulnerabilities that the libraries alone prevent — was reviewed explicitly:
+
+- **No self-granted roles.** `registerSchema` accepts only `email`, `password`, `displayName`. An early draft accepted `roles`; it was removed because a client could self-grant `admin`. The only grant path is the trusted `adminEmails` bootstrap config, passed as inert metadata to `AuthService.register`, and `SqliteUserStore` owns role defaults (`['user']`).
+- **Fresh-record authorization.** `#principal()` validates the session ID, reads the live session via `SessionManager`, then resolves the user from the `users` table on **every** privileged call. `getPublicProfile` caching is presentation-only and is never consulted for an authorization decision; `grantRole` invalidates that cache so a stale role cannot linger.
+- **Session-derived identity.** `createPost` sets `authorId` from the resolved principal. A payload-supplied `authorId` is ignored (a test asserts this). `grantRole` runs inside `Database.transaction` and enforces an `ASSIGNABLE_ROLES` allow-list.
+- **Injection / fixation.** All SQL is parameterized; session IDs must match 16–256 URL-safe characters; `rotateSession` uses the atomic Lua-backed path so the old ID is invalidated immediately.
+- **Credential handling.** Argon2id with a real `generateDummyHash()` for absent-user login; `sanitizeUser` strips `passwordHash` from all returned users.
+
+---
+
+### Stage 4 security review (SEC-017 – SEC-021)
+
+**Status: Secure (with documented limitations)**
+
+- **Realtime (SEC-017).** `RealtimeHub` has **no implicit allow default** — `authorize` is required and consulted for `publish`, `subscribe`, and `deliver`. `deliver` is evaluated **per subscriber**, so a privileged channel cannot leak to an unauthorized listener. Delivered payloads are deep-frozen so one subscriber cannot mutate a shared value. At-least-once redelivery is de-duplicated by a **bounded per-subscriber** id cache (an initial global-set design was corrected because it would have suppressed the second subscriber). Channel names reject traversal/control characters. Covered by 8 security tests.
+- **Jobs (SEC-018).** `InMemoryJobQueue.claim()` is atomic and increments attempts under a single synchronous pass, so at-least-once redelivery cannot double-execute a side effect. `Worker.stop()` drains already-chained in-flight handlers while rejecting new work synchronously. Backoff is capped, retries are bounded, and permanent failures move to dead-letter rather than looping. Covered by 7 security tests.
+- **Storage (SEC-019).** User keys are validated against absolute paths, backslashes, `.`/`..` segments, and control characters, then mapped to **SHA-256 hex filenames** — user-controlled paths are never used on disk. Writes are atomic (temp file + `rename`, metadata sidecar published last); a symlinked `objects/` directory is rejected; reads verify etag/size integrity. Covered by 9 security tests.
+- **Mail (SEC-020).** CRLF/NUL header injection is rejected in subjects, display names, and headers. `renderTemplate` HTML-escapes interpolated values by default (XSS prevention). Retries are bounded and deterministic; a permanent failure throws `MailSendError` with attempt count and `cause` — **never a false success**. `TestTransport` is explicitly in-memory and never contacts SMTP/HTTP. Covered by 9 security tests.
+- **Testing (SEC-021).** Helpers delegate to the **real** `@sveltex/core` rather than reimplementing DI, so config validation (`SX_CONFIG_INVALID`), request-scope enforcement (`SX_PROVIDER_SCOPE_VIOLATION`), and lifecycle hook failures are surfaced, not bypassed. `withTestApplication` guarantees `stop()` even when the body throws; forgotten request scopes are disposed; fakes expose frozen defensive snapshots and reject use after `close()`. Covered by 12 security tests.
+
+---
+
+### Stage 5 CLI security review (SEC-022 – SEC-026)
+
+**Status: Secure (with documented limitations)**
+
+- **Static config inspection (SEC-022).** `inspectConfigText()` reads `sveltex.config.ts` as text; diagnostic commands never `import()` it. A test config whose top level throws is never executed. Secret redaction deep-clones (never mutates input) and covers token/secret/password/private-key/credential/API-key/access-key/client-secret/connection-string patterns. Env reporting exposes names only, with the literal "value not read" marker.
+- **Command execution boundary (SEC-023).** `defaultRunner` uses `spawn` with `shell: false`; no user string is ever concatenated into a shell command. `assertPackages()` rejects leading dashes and metacharacters after a security test demonstrated that `--ignore-scripts` would otherwise be forwarded as an option. `safeRelativePath()` rejects traversal including encoded variants and NUL.
+- **File safety (SEC-024).** `ChangeSet` snapshots prior content and restores it on rollback; tests cover rollback after a later write fails. `init` preserves user hooks: `export const handle: Handle = auditHandle;` becomes `const userHandle: Handle = auditHandle;` composed via `sequence(createSvelteXHandler(app), userHandle)`. Overwrite protection, dry-run, and install-failure rollback are all covered by tests.
+- **No fake capabilities (SEC-025).** The integration registry is derived from the real workspace packages and their versions; no unshipped provider is listed. `upgrade` performs no network lookup. The `saas` README lists auth/persistence/billing/payments as NOT included and NOT implied. `doctor` warns about process-local adapters under multi-instance/production conditions instead of claiming distributed durability.
+- **Fixed flag handling (SEC-026).** Found during a real `init --no-install` smoke run, not by a test author: the CLI accepted the flag but still ran `pnpm add`, failing offline. Fixed and covered by a regression test.
+
+---
+
+## Recommendations
+
+1. **Add default rate limiting guidance** to Auth README with example limiter implementations (token bucket, sliding window).
+2. **Document session rotation best practices** — recommend calling `rotate()` after login and privilege escalation.
+3. **Add CSRF guidance** to Session README — recommend SvelteKit's built-in CSRF protection or `@sveltejs/kit` origin checking.
+4. **Add security test for config metadata** — verify that `__proto__` injection attempts in nested metadata are rejected (current tests cover top-level; nested should be verified).
+5. **Add timing test for auth login** — measure that user-absent and user-present-but-wrong-password paths take similar time.

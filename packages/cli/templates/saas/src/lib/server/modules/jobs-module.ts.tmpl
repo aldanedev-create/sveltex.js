@@ -1,0 +1,11 @@
+import { defineModule, token } from '@sveltex/core';
+import type { JobQueue } from '@sveltex/jobs';
+import { createExampleQueue } from '../jobs';
+
+export const EXAMPLE_QUEUE = token<JobQueue>('jobs.exampleQueue');
+
+export const exampleJobsModule = defineModule({
+  name: 'example-jobs',
+  providers: [{ provide: EXAMPLE_QUEUE, useFactory: () => createExampleQueue() }],
+  exports: [EXAMPLE_QUEUE]
+});

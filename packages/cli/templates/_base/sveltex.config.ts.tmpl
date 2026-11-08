@@ -1,0 +1,16 @@
+import { defineConfig } from '@sveltex/config';
+
+/**
+ * Canonical SvelteX application configuration.
+ * Types and validation are owned by the framework packages, not by the CLI.
+ * This file is never executed by the CLI's diagnostic commands.
+ */
+export default defineConfig({
+  app: {
+    name: '{{APP_NAME}}',
+    environment: 'development'
+  },
+  modules: ['./src/lib/server/modules/index'],
+  template: '{{TEMPLATE_ID}}',
+  docsUrl: '{{DOCS_URL}}'
+});

@@ -1,0 +1,18 @@
+import { defineModule, token } from '@sveltex/core';
+
+export interface GreetingService {
+  readonly greet: (name: string) => string;
+}
+
+export const GREETING = token<GreetingService>('greeting');
+
+export const greetingModule = defineModule({
+  name: 'greeting',
+  providers: [
+    {
+      provide: GREETING,
+      useValue: { greet: (name: string) => 'Hello, ' + name + '!' } satisfies GreetingService
+    }
+  ],
+  exports: [GREETING]
+});

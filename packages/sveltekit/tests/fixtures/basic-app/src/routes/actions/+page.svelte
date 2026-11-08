@@ -1,5 +1,6 @@
 <script lang="ts">
-  let { data, form } = $props<{ data: { message: string }; form?: { message: string; audited: boolean } }>();
+  import type { ActionData, PageData } from './$types';
+  let { data, form }: { data: PageData; form: ActionData } = $props();
 </script>
 
 <main>

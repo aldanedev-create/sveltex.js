@@ -1,0 +1,145 @@
+<script lang="ts">
+  // Static, server-rendered welcome page. No client-side JavaScript is added.
+  const appName = '{{APP_NAME}}';
+</script>
+
+<svelte:head>
+  <title>{{APP_NAME}} - SvelteX</title>
+  <meta name="description" content="A {{TEMPLATE_ID}} starter built with SvelteKit and SvelteX." />
+</svelte:head>
+
+<main>
+  <header>
+    <p class="eyebrow">SvelteKit + SvelteX</p>
+    <h1>{appName}</h1>
+    <p class="lead">
+      This project was generated from the <code>{{TEMPLATE_ID}}</code> starter.
+      SvelteKit provides routing and rendering; SvelteX provides application
+      composition. Only the packages listed below are installed - no other
+      capability is implied.
+    </p>
+  </header>
+
+  <section aria-labelledby="start">
+    <h2 id="start">Start developing</h2>
+    <p>From this project directory, run:</p>
+    <pre><code>{{DEV_COMMAND}}</code></pre>
+    <p>If you skipped installation, run <code>{{INSTALL_COMMAND}}</code> first.</p>
+  </section>
+
+  <section aria-labelledby="routes">
+    <h2 id="routes">Example routes</h2>
+    <ul>
+{{EXAMPLE_LINKS}}
+    </ul>
+  </section>
+
+  <section aria-labelledby="installed">
+    <h2 id="installed">Installed SvelteX packages</h2>
+    <ul>
+{{INSTALLED_LIST}}
+    </ul>
+  </section>
+
+  <section aria-labelledby="next">
+    <h2 id="next">Architecture and next steps</h2>
+    <ol>
+      <li><code>src/routes/</code> - SvelteKit pages and endpoints.</li>
+      <li><code>src/lib/server/sveltex.ts</code> - the SvelteX application instance.</li>
+      <li><code>src/lib/server/modules/</code> - DI modules registered at startup.</li>
+      <li><code>src/hooks.server.ts</code> - SvelteX composed with SvelteKit sequence().</li>
+      <li><code>sveltex.config.ts</code> - canonical application configuration.</li>
+    </ol>
+    <p>
+      Continue with the <a href="{{DOCS_URL}}" rel="noreferrer">SvelteX documentation</a>
+      and inspect the installed packages listed above.
+    </p>
+  </section>
+</main>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color-scheme: light dark;
+    background: #f6f6f8;
+    color: #1b1b20;
+    line-height: 1.6;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :global(body) {
+      background: #141419;
+      color: #ededf2;
+    }
+  }
+
+  main {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3.5rem);
+  }
+
+  h1 {
+    font-size: clamp(2rem, 6vw, 3rem);
+    line-height: 1.15;
+    margin: 0.25rem 0 1rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    margin-top: 0;
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin: 0;
+  }
+
+  .lead {
+    font-size: 1.05rem;
+    max-width: 40rem;
+  }
+
+  section {
+    margin-top: 2rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 0.75rem;
+  }
+
+  pre {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+  }
+
+  a {
+    color: inherit;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+
+  a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  ul,
+  ol {
+    padding-left: 1.25rem;
+  }
+
+  li + li {
+    margin-top: 0.35rem;
+  }
+</style>

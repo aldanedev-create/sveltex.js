@@ -1,0 +1,9 @@
+import { sequence } from '@sveltejs/kit/hooks';
+import { createSvelteXHandler } from '@sveltex/sveltekit';
+import { app } from '$lib/server/sveltex';
+
+/**
+ * SvelteX is composed with SvelteKit's own sequence() helper. Add further
+ * handles as arguments to sequence(); do not replace the SvelteX handle.
+ */
+export const handle = sequence(createSvelteXHandler(app));

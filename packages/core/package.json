@@ -1,5 +1,5 @@
 {
-  "name": "@sveltexjs/core",
+  "name": "@sveltex/core",
   "version": "0.1.0",
   "description": "Framework-independent application engine for SvelteX",
   "license": "MIT",

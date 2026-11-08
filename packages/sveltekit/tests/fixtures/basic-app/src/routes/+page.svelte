@@ -1,5 +1,6 @@
 <script lang="ts">
-  let { data } = $props<{ data: { message: string } }>();
+  import type { PageData } from './$types';
+  let { data }: { data: PageData } = $props();
 </script>
 
 <svelte:head><title>SvelteX fixture</title></svelte:head>

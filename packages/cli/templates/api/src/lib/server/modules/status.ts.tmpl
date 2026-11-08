@@ -1,0 +1,9 @@
+import { defineModule, token } from '@sveltex/core';
+
+export const SERVICE_NAME = token<string>('service.name');
+
+export const statusModule = defineModule({
+  name: 'status',
+  providers: [{ provide: SERVICE_NAME, useValue: '{{APP_NAME}}' }],
+  exports: [SERVICE_NAME]
+});

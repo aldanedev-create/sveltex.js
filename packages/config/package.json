@@ -1,5 +1,5 @@
 {
-  "name": "@sveltexjs/config",
+  "name": "@sveltex/config",
   "version": "0.1.0",
   "description": "Typed configuration composition, validation, and environment-independent configuration helpers",
   "license": "MIT",

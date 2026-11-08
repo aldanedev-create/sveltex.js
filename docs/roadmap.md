@@ -2,6 +2,8 @@
 
 SvelteX is developed in five stages. The CLI is the final stage, even though it will be the main onboarding tool developers can choose to install first. The existing Core and SvelteKit adapter are retained and improved; they are not rebuilt.
 
+> **Status (2026-11-08): all five stages are implemented and verified.** 450 runtime tests, 71 security tests, and 16 type-test projects pass under `pnpm check`. See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
+
 ## Stage 1 — Foundation
 
 **Build first**
@@ -36,7 +38,7 @@ Each package is independently installable. Provider-specific drivers should be o
 
 **Current state:** all five packages now have initial implementations: Database, Validation, Auth, Cache, and Session. Their public APIs are deliberately driver/provider-neutral. Session stores require atomic create, compare-and-set update, and rotation operations; Auth requires an injected password hasher, a precomputed dummy hash, and an optional rate limiter. The in-memory cache/session stores are explicitly single-process development/test implementations.
 
-**Remaining before Stage 4:** run the complete pnpm workspace pipeline and actual SvelteKit fixture build in CI; add and verify real provider adapters separately; build a reference app that demonstrates persistence, validation, authentication, authorization, and sessions. These packages are not declared production-certified merely because the contract tests pass.
+**Stage 3 outcome:** real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (Argon2id), `RedisCache`, and `RedisSessionStore` (atomic Lua scripts) ship with integration tests; `examples/reference-app/` demonstrates persistence, validation, authentication, authorization, sessions, and caching end-to-end (18 integration tests). PostgreSQL/MySQL, migrations/pooling, cookie transport, and CSRF remain optional hardening. The workspace packages are unpublished, so a clean consumer install is a CI/release task.
 
 ## Stage 4 — Advanced capabilities
 
@@ -48,7 +50,7 @@ Each package is independently installable. Provider-specific drivers should be o
 
 **Responsibilities:** realtime transports, durable job/worker contracts, object storage, email providers, and test application/fake adapter helpers.
 
-**Current state:** not started. Do not begin until Stage 1–3 contracts and the SvelteKit fixture pass the full CI pipeline.
+**Current state:** complete. All five packages (`@sveltex/realtime`, `@sveltex/jobs`, `@sveltex/storage`, `@sveltex/mail`, `@sveltex/testing`) ship real process-local implementations behind explicit adapter contracts, with 131 runtime + 45 security tests, public-API type tests, and READMEs documenting deployment limitations. No WebSocket/SSE, durable broker, S3, or SMTP/HTTP adapter is shipped or advertised.
 
 **Exit:** provider boundaries, retries, cleanup, failure behavior, authorization, and test doubles are verified.
 
@@ -63,7 +65,9 @@ Each package is independently installable. Provider-specific drivers should be o
 
 The CLI is implemented only after the package APIs and integration metadata are stable. It should be the best first experience for creating a SvelteX application, but it must orchestrate the framework rather than contain framework logic.
 
-**Exit:** generated projects install, type-check, run, test, and build on supported operating systems and package managers. File changes are previewable and non-destructive.
+**Current state:** complete, built last. `packages/cli/` publishes `sveltex` with 17 commands, six official templates (41 `.tmpl` assets), four welcome pages, static/redacted diagnostics, integration add/remove, generators, upgrade/migration tooling, preview/dry-run/rollback safety, and stable `--json` output with exit codes `0`–`4`. 57 CLI tests pass; `npm pack --dry-run` verified. Generated apps never depend on the CLI at runtime. No external provider adapter is shipped or advertised.
+
+**Exit status:** file changes are previewable and non-destructive; templates are tested (zero unrendered placeholders); `dev`/`build`/`preview`/`check`/`test` delegate to the project's own scripts. **Not yet claimed:** a consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages — the workspace packages are unpublished, so this remains CI/release work.
 
 ## Cross-stage quality requirements
 

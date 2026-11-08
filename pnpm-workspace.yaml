@@ -1,3 +1,4 @@
 packages:
   - "packages/*"
   - "packages/sveltekit/tests/fixtures/*"
+  - "examples/*"
