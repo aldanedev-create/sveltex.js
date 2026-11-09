@@ -230,3 +230,45 @@ done in batches, each with real integration tests, documentation sync, XERJ veri
 - Added security findings SEC-031 – SEC-034 (ORM adapter capability integrity, error/health redaction, passive env config, optional-peer isolation) and synced all `docs/audit/*`, `docs/specification.md`, `docs/manifest.json`, `docs/roadmap.md`, `docs/packages/README.md`, and the root `README.md` to the 536/86 baseline. Manifest now lists the three completion docs (36 documents).
 
 **Discipline carried forward:** no fake providers; no claiming untested support; never skip tests to force CI green; XERJ used for repository research. Phases 2–12 remain.
+
+---
+
+## Session 9 — Completion Plan: Phase 2 — `@sveltex/auth` (2026-11-09)
+
+Per the completion plan's Phase 2, extended only `@sveltex/auth` — no new package was created.
+Core rule honoured: every added capability has a real implementation and a real test.
+
+- Studied the existing `AuthService` / `Argon2Hasher` / `AuthAttemptLimiter` port from the Phase 0
+  gap analysis; confirmed the limiter was a *port only*, and reset/verification/RBAC were absent.
+- **Delivered** (`packages/auth/src`):
+  - `errors.ts` — centralized `AuthError` hierarchy (`AuthConflictError`, `AuthConfigurationError`,
+    `AuthUnauthorizedError`, `AuthForbiddenError`, `AuthRateLimitError`, `AuthTokenInvalidError`,
+    `AuthTokenExpiredError`, `AuthTokenUsedError`, `AuthTokenPurposeError`, `AuthPasswordPolicyError`).
+  - `limiter.ts` — `FixedWindowLimiter` concrete `AuthAttemptLimiter` (consulted before user lookup,
+    so it also throttles enumeration; `rateLimit`/`recordSuccess`/`reset`, default deny on error).
+  - `tokens.ts` — `TokenManager` + `MemoryTokenStore`/`TokenStore` port: 256-bit opaque tokens,
+    single-use, expiring, **purpose-scoped** (a reset token cannot replay against verification).
+  - `reset.ts` — `PasswordResetService` (`requestReset` silent for unknown emails; `completeReset`
+    validates the new password *before* consuming the token); `PasswordResetStore` contract.
+  - `verification.ts` — `EmailVerificationService` single-use verification links; `EmailVerificationStore`.
+  - `rbac.ts` — `RbacBuilder` / `createRbac`: deny-by-default, role inheritance with cycle detection,
+    `requirePermission` throws 401 (no roles) or 403 (under-privileged).
+  - `index.ts` — wired all new exports; centralized errors via `errors.ts`.
+- Added subpath exports to `package.json` (`/limiter`, `/tokens`, `/rbac`, `/reset`, `/verification`).
+- **Tests:** new `tests/limiter.test.mjs`, `tokens.test.mjs`, `rbac.test.mjs`, `reset.test.mjs`,
+  `verification.test.mjs`, `security/phase2-security.test.mjs`, and `tests/types/phase2.test.ts`.
+- **Verification (measured):** `@sveltex/auth` → **58/58** runtime + **8/8** security + type tests,
+  all green via `pnpm --filter @sveltex/auth check` (0 failures, 0 skipped). Auth went from
+  29→58 runtime and 1→8 security. Integration services (PostgreSQL/MySQL/Redis) were offline this
+  session, so the remainder of the full `pnpm check` gate is carried from the prior green baseline.
+- **Docs synced:** `specification.md` (565/565 runtime, 93/93 security; auth row + Stage-3 baseline
+  updated), `roadmap.md` (status date 2026-11-09), `docs/audit/package-status.md` (auth = 58/58,
+  8/8, full feature list), `docs/audit/README.md` (Stage 3 note), `docs/completion/phase-0-audit.md`
+  (Phase 2 table marked complete), `packages/auth/README.md` rewritten with all new modules, and this
+  progress entry. Completion report: [`docs/completion/phase-2-auth.md`](../completion/phase-2-auth.md).
+
+**Not claimed / still open:** OAuth2/OIDC and MFA are explicitly out of scope for this plan and are
+not advertised. A production `TokenStore` (Redis/DB-backed) is left to the consumer; `MemoryTokenStore`
+is for dev/test only. CSRF, cookie transport, and account-lockout policies remain optional hardening.
+
+**Next:** commit + push Phase 2, then proceed to Phase 3 (sessions) per the plan.

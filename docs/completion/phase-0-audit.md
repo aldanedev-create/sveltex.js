@@ -110,16 +110,16 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 > ORM adapters delegate to the ORM-native migrator; `MigrationRunner` is not a replacement. The main
 > entry point imports no ORM.
 
-### Phase 2 — `@sveltex/auth`
+### Phase 2 — `@sveltex/auth` (completed 2026-11-09)
 | Requirement | State | Reality |
 |---|:---:|---|
 | Registration, login, password hashing (Argon2id) | ✅ | `AuthService` + `Argon2Hasher`, parameterized stores |
 | Role self-assignment rejection, fresh-record privileged reads | ✅ | verified in reference app |
-| Timing / enumeration protections, rate-limiting port | ◐ | `AuthAttemptLimiter` port exists; no concrete limiter |
-| OAuth2 / OIDC | ✗ | not implemented, not advertised |
-| Password reset / email verification workflows | ✗ | not implemented |
-| Token expiration / revocation / session fixation | ◐ | delegated to `AuthSessionPort`; no first-class API |
-| RBAC / permission checks | ◐ | roles on `AuthUser`; no permission evaluator |
+| Timing / enumeration protections, rate-limiting port | ✅ | `AuthAttemptLimiter` port + concrete `FixedWindowLimiter` (fixed-window, injectable clock) wired into `AuthService` |
+| OAuth2 / OIDC | ✗ | not implemented, not advertised — explicitly out of scope for this completion plan |
+| Password reset / email verification workflows | ✅ | `PasswordResetService` + `EmailVerificationService` over `TokenManager` (single-use, expiring, purpose-scoped) |
+| Token expiration / revocation / session fixation | ✅ | `TokenManager` enforces expiry + single-use revocation; reset/verify tokens are subject-bound |
+| RBAC / permission checks | ✅ | `RbacBuilder` / `createRbac`: deny-by-default, role inheritance, `requirePermission` (401/403) |
 
 ### Phase 3 — `@sveltex/session`
 | Requirement | State | Reality |

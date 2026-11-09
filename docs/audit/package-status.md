@@ -15,7 +15,7 @@
 | `@sveltex/sveltekit` | ✅ Pass | ✅ Pass | ✅ 35/35 | ✅ 5/5 | ✅ Pass | **Stage 2 — Ready** |
 | `@sveltex/database` | ✅ Pass | ✅ Pass | ✅ 116/116 | ✅ 16/16 | ✅ Pass | **Stage 3 — Complete (SQLite/PostgreSQL/MySQL + migrations + pooling + ORM/BYO)** |
 | `@sveltex/validation` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 3 — Ready** |
-| `@sveltex/auth` | ✅ Pass | ✅ Pass | ✅ 29/29 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Argon2id done)** |
+| `@sveltex/auth` | ✅ Pass | ✅ Pass | ✅ 58/58 | ✅ 8/8 | ✅ Pass | **Stage 3 — Complete (Argon2id + reset/verification/RBAC/limiter/tokens)** |
 | `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
 | `@sveltex/session` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
 | `@sveltex/example-reference-app` | ✅ Pass | ✅ Pass | ✅ 18/18 | N/A | ✅ Pass | **Stage 3 — Exit criterion met** |
@@ -94,15 +94,15 @@
 - **Tests:** 8 tests (unit + security).
 - **Limitation:** No specific validator adapters (Zod, Valibot, etc.) but Standard Schema is vendor-neutral by design.
 
-#### `@sveltex/auth` — ⚠️ Partial (Argon2id hasher implemented, others pending)
+#### `@sveltex/auth` — ✅ Complete (Argon2id + reset/verification/RBAC/limiter/tokens)
 
-- **Source:** `index.ts` (75 lines) + `argon2.ts` (real `@node-rs/argon2` hasher).
-- **Public API:** `AuthService`, `AuthUser`, `CredentialUserStore`, `PasswordHasher`, `AuthSessionPort`, `AuthAttemptLimiter`, `AuthServiceOptions`, `AuthResult`, `AuthError`, `AuthConflictError`, `AuthConfigurationError`, `Argon2Hasher`, `generateDummyHash`.
-- **Features:** Registration/login/logout/rotateSession. Injected hasher (no weak default). Dummy hash for timing mitigation. Email normalization. Password length limits. Attempt limiter. User sanitization.
-- **Adapters:** `Argon2Hasher` uses `@node-rs/argon2` (Argon2id). `generateDummyHash` produces a constant-time dummy hash for absent-user login.
-- **Tests:** 29 tests — 16 unit/security + 13 real Argon2id integration tests (`tests/argon2-integration.test.mjs`), including unique-salt verification, wrong-password rejection, malformed-hash handling, custom parameters, and full `AuthService` registration/login/logout flow.
-- **Missing:** MFA. Password reset. Email verification. OAuth/OIDC. Authorization policy. Cookie security.
-- **Limitation:** Real hashing verified only with Argon2id via `@node-rs/argon2`.
+- **Source:** `index.ts` (contracts, `AuthService`), `argon2.ts` (real `@node-rs/argon2` hasher), `errors.ts`, `limiter.ts`, `tokens.ts`, `rbac.ts`, `reset.ts`, `verification.ts`.
+- **Public API:** `AuthService`, `AuthUser`, `CredentialUserStore`, `PasswordHasher`, `AuthSessionPort`, `AuthAttemptLimiter`, `AuthServiceOptions`, `AuthResult`, `AuthError`, `AuthConflictError`, `AuthConfigurationError`, `AuthForbiddenError`, `AuthUnauthorizedError`, `AuthTokenError`, `AuthTokenExpiredError`, `AuthTokenInvalidError`, `AuthTokenUsedError`, `Argon2Hasher`, `generateDummyHash`, `FixedWindowLimiter`, `TokenManager`, `MemoryTokenStore`, `generateSecureToken`, `RbacBuilder`, `createRbac`, `PasswordResetService`, `EmailVerificationService`.
+- **Features:** Registration/login/logout/rotateSession. Injected hasher (no weak default). Dummy hash for timing mitigation. Email normalization. Password length limits. Attempt limiter. User sanitization. Concrete `FixedWindowLimiter` satisfying `AuthAttemptLimiter`. `TokenManager` issuing single-use, expiring, purpose-scoped tokens (`MemoryTokenStore`). `PasswordResetService` (silent for unknown emails; validates password before consuming the token). `EmailVerificationService`. Deny-by-default `RbacBuilder`/`createRbac` with role inheritance and `requirePermission` (401/403).
+- **Adapters:** `Argon2Hasher` uses `@node-rs/argon2` (Argon2id). `generateDummyHash` produces a constant-time dummy hash for absent-user login. Token delivery and credential stores are ports (`PasswordResetSender`, `EmailVerificationSender`, `PasswordResetStore`, `EmailVerificationStore`) so no mail client or DB driver is assumed.
+- **Tests:** 58 tests (50 unit/security + 8 security in `tests/security/`) including 14 real Argon2id integration tests, full `AuthService` registration/login/logout flow, fixed-window limiter behavior, token lifecycle (single-use/expiry/purpose-scoping), RBAC inheritance + cycle detection + 401/403, password-reset and email-verification flows, and timing/enumeration/brute-force/bypass security tests.
+- **Out of scope (explicit, not advertised):** OAuth2/OIDC, MFA, cookie/CSRF hardening (delegated to the session package).
+- **Limitation:** Real hashing verified only with Argon2id via `@node-rs/argon2`; the in-memory token store is single-process (production deployments should back `TokenStore` with Redis/DB).
 
 #### `@sveltex/cache` — ⚠️ Partial (Redis adapter implemented, advanced features pending)
 

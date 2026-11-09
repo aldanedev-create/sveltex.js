@@ -20,6 +20,30 @@
     "./argon2": {
       "types": "./dist/argon2.d.ts",
       "import": "./dist/argon2.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./limiter": {
+      "types": "./dist/limiter.d.ts",
+      "import": "./dist/limiter.js"
+    },
+    "./tokens": {
+      "types": "./dist/tokens.d.ts",
+      "import": "./dist/tokens.js"
+    },
+    "./rbac": {
+      "types": "./dist/rbac.d.ts",
+      "import": "./dist/rbac.js"
+    },
+    "./reset": {
+      "types": "./dist/reset.d.ts",
+      "import": "./dist/reset.js"
+    },
+    "./verification": {
+      "types": "./dist/verification.d.ts",
+      "import": "./dist/verification.js"
     }
   },
   "scripts": {

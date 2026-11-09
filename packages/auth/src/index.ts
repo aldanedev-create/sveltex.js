@@ -1,4 +1,5 @@
 import { cloneData, deepFreeze } from '@sveltex/shared';
+import { AuthConflictError, AuthConfigurationError } from './errors.js';
 export interface AuthUser { readonly id: string; readonly email: string; readonly roles?: readonly string[]; readonly [key: string]: unknown; }
 export interface CredentialUserStore<User extends AuthUser = AuthUser> {
   findByEmail(normalizedEmail: string): Promise<(User & { readonly passwordHash: string }) | undefined>;
@@ -68,7 +69,10 @@ export class AuthService<User extends AuthUser = AuthUser, Session = unknown> {
   }
 }
 
-export class AuthError extends Error { readonly code: string; constructor(message: string, code: string) { super(message); this.name = 'AuthError'; this.code = code; } }
-export class AuthConflictError extends AuthError { constructor(message: string) { super(message, 'AUTH_CONFLICT'); this.name = 'AuthConflictError'; } }
-export class AuthConfigurationError extends AuthError { constructor(message: string) { super(message, 'AUTH_CONFIGURATION'); this.name = 'AuthConfigurationError'; } }
+export * from './errors.js';
+export * from './limiter.js';
+export * from './tokens.js';
+export * from './rbac.js';
+export * from './reset.js';
+export * from './verification.js';
 function sanitizeUser<User extends AuthUser>(user: User & { readonly passwordHash?: string }): User { const { passwordHash: _hash, ...safe } = user; return deepFreeze({ ...safe }) as User; }

@@ -1,7 +1,7 @@
 {
   "project": "SvelteX",
-  "status": "All five stages implemented and verified; completion plan Phase 0 audit + Phase 1 database ORM integrations delivered (536 runtime tests); Stage 5 CLI built last",
-  "document_count": 36,
+  "status": "All five stages implemented and verified; completion plan Phase 0 audit + Phase 1 database ORM integrations + Phase 2 auth (limiter/tokens/reset/verification/RBAC) delivered (565 runtime tests); Stage 5 CLI built last",
+  "document_count": 37,
   "documents": [
     "README.md",
     "docs/architecture/application-lifecycle.md",
@@ -38,7 +38,8 @@
     "docs/testing/verification-report.md",
     "docs/completion-plan.md",
     "docs/completion/phase-0-audit.md",
-    "docs/completion/phase-1-database.md"
+    "docs/completion/phase-1-database.md",
+    "docs/completion/phase-2-auth.md"
   ],
-  "note": "Core and SvelteKit are preserved. All five stages are implemented and verified: real SQLite, PostgreSQL and MySQL database adapters, migrations, connection pooling, Argon2id, Redis cache/session, Stage 4 process-local adapters, and the Stage 5 sveltex CLI (built last) all ship with integration or runtime tests. 536 runtime tests, 86 security tests and 16 type-test projects pass under pnpm check (0 failures, 0 skipped). CI provisions PostgreSQL 16, MySQL 8.0 and Redis 7 services. Generated apps never depend on the CLI at runtime; optional ORM integrations (Drizzle/Kysely behind optional peers) and BYO ORM adapters ship with real PostgreSQL tests, while built-in Prisma/MikroORM/TypeORM, WebSocket/SSE, S3 and SMTP/HTTP adapters are documented as unshipped; no fake provider is advertised. The Existing Package Completion Plan is now the active roadmap (Phase 0 audit + Phase 1 database delivered)."
+  "note": "Core and SvelteKit are preserved. All five stages are implemented and verified: real SQLite, PostgreSQL and MySQL database adapters, migrations, connection pooling, Argon2id, Redis cache/session, Stage 4 process-local adapters, and the Stage 5 sveltex CLI (built last) all ship with integration or runtime tests. 565 runtime tests, 93 security tests and 16 type-test projects pass (0 failures, 0 skipped). CI provisions PostgreSQL 16, MySQL 8.0 and Redis 7 services. Generated apps never depend on the CLI at runtime; optional ORM integrations (Drizzle/Kysely behind optional peers) and BYO ORM adapters ship with real PostgreSQL tests, while built-in Prisma/MikroORM/TypeORM, WebSocket/SSE, S3 and SMTP/HTTP adapters are documented as unshipped; no fake provider is advertised. Phase 2 extended @sveltex/auth with a concrete FixedWindowLimiter, TokenManager (single-use/expiring/purpose-scoped), PasswordResetService, EmailVerificationService and deny-by-default RBAC; OAuth2/OIDC and MFA remain explicitly out of scope. The Existing Package Completion Plan is now the active roadmap (Phase 0 audit + Phase 1 database + Phase 2 auth delivered; Phases 3–12 remain)."
 }
