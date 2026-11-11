@@ -16,7 +16,7 @@
 | `@sveltex/database` | 116 | 16 | ✅ | ✅ SQLite + real PG/MySQL + real Drizzle/Kysely PG | All pass |
 | `@sveltex/validation` | 8 | 1 | ✅ | — | All pass |
 | `@sveltex/auth` | 58 | 8 | ✅ | ✅ Argon2id | All pass |
-| `@sveltex/cache` | 24 | 1 | ✅ | ✅ Redis | All pass |
+| `@sveltex/cache` | 121 | 15 | ✅ | ✅ Redis (real) + unreachable-port fallback | All pass |
 | `@sveltex/session` | 104 | 13 | ✅ | ✅ SQLite + real PG/MySQL/Redis + real AuthService | All pass |
 | `@sveltex/example-reference-app` | 18 | — | ✅ | ✅ Memory + Redis | All pass |
 | `@sveltex/realtime` | 25 | 8 | ✅ | ✅ In-process transport | All pass |
@@ -25,18 +25,18 @@
 | `@sveltex/mail` | 26 | 9 | ✅ | ✅ Test transport | All pass |
 | `@sveltex/testing` | 32 | 12 | ✅ | ✅ Real core DI | All pass |
 | `sveltex` (CLI) | 57 | 9 | ✅ | ✅ Real fs + recorder runner | All pass |
-| **Total** | **637** | **105** | **16/16** | — | **All pass** |
+| **Total** | **734** | **119** | **16/16** | — | **All pass** |
 
 `pnpm test` is the per-package script count summed by `pnpm -r test` (the `pnpm check` gate);
 `test:security` is the standalone `pnpm test:security` chain. Both were measured on 2026-11-11
-with live services: **0 failures, 0 skipped**. `npm pack --dry-run` for `@sveltex/session` →
-27 files (four new subpath `.js`/`.d.ts` pairs, no src/test leakage).
+with live services: **0 failures, 0 skipped**. `npm pack --dry-run` for `@sveltex/session` → 27 files; for `@sveltex/cache` → 43 files
+(10 `dist/*.js` + 10 `dist/*.d.ts` pairs, no src/test leakage).
 
 ---
 
 ## Test infrastructure
 
-> **Counting note (updated 2026-11-11, Phase 3):** `637` is the measured total of `pnpm -r test` (the `pnpm check` gate): 449 Stage 1–3 + reference app, 131 Stage 4, 57 Stage 5 CLI. `105` is the measured total of the standalone `pnpm test:security` chain (51 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI). These are **two distinct gates, not an additive total** — Stage 4 packages, the CLI, and now `@sveltex/session` include their `tests/security/*.test.mjs` files inside the package `test` script, so those security cases are also counted within 637; the separate `test:security` gate re-runs them. Phase 2 added 29 runtime + 7 security (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security (session 32→104 / 1→13). Both gates were re-run on 2026-11-11 with live PostgreSQL 16, MySQL 8.0 and Redis 7: exit 0, 0 failures, 0 skipped, 16 test projects (`test:types`). No carried baseline.
+> **Counting note (updated 2026-11-11, Phase 4):** `734` is the measured total of `pnpm -r test` (the `pnpm check` gate): 546 Stage 1–3 + reference app, 131 Stage 4, 57 Stage 5 CLI. `119` is the measured total of the standalone `pnpm test:security` chain (65 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI). These are **two distinct gates, not an additive total** — Stage 4 packages, the CLI, `@sveltex/session` and now `@sveltex/cache` include their `tests/security/*.test.mjs` files inside the package `test` script, so those security cases are also counted within 734; the separate `test:security` gate re-runs them. Phase 2 added 29 runtime + 7 security (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security (session 32→104 / 1→13); Phase 4 added 97 runtime + 14 security (cache 24→121 / 1→15). Both gates were re-run on 2026-11-11 with live PostgreSQL 16, MySQL 8.0 and Redis 7: exit 0, 0 failures, 0 skipped, 16 test projects (`test:types`). No carried baseline, no skipped test.
 
 ### Runner
 

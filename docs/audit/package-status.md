@@ -16,7 +16,7 @@
 | `@sveltex/database` | ✅ Pass | ✅ Pass | ✅ 116/116 | ✅ 16/16 | ✅ Pass | **Stage 3 — Complete (SQLite/PostgreSQL/MySQL + migrations + pooling + ORM/BYO)** |
 | `@sveltex/validation` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 3 — Ready** |
 | `@sveltex/auth` | ✅ Pass | ✅ Pass | ✅ 58/58 | ✅ 8/8 | ✅ Pass | **Stage 3 — Complete (Argon2id + reset/verification/RBAC/limiter/tokens)** |
-| `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
+| `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 121/121 | ✅ 15/15 | ✅ Pass | **Stage 3 — Complete (Phase 4: envelope/namespaces/tags/fallback/single-flight)** |
 | `@sveltex/session` | ✅ Pass | ✅ Pass | ✅ 104/104 | ✅ 13/13 | ✅ Pass | **Stage 3 — Complete (cookies + CSRF + SQL store + revocation + auth bridge)** |
 | `@sveltex/example-reference-app` | ✅ Pass | ✅ Pass | ✅ 18/18 | N/A | ✅ Pass | **Stage 3 — Exit criterion met** |
 | `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 25/25 | ✅ 8/8 | ✅ Pass | **Stage 4 — Ready (process-local)** |
@@ -26,7 +26,7 @@
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **637/637** | **105/105** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **734/734** | **119/119** | **16/16** | **All pass** |
 
 ---
 
@@ -104,15 +104,16 @@
 - **Out of scope (explicit, not advertised):** OAuth2/OIDC, MFA, cookie/CSRF hardening (delegated to the session package).
 - **Limitation:** Real hashing verified only with Argon2id via `@node-rs/argon2`; the in-memory token store is single-process (production deployments should back `TokenStore` with Redis/DB).
 
-#### `@sveltex/cache` — ⚠️ Partial (Redis adapter implemented, advanced features pending)
+#### `@sveltex/cache` — ✅ Complete (Phase 4: envelope / namespaces / tags / fallback / single-flight)
 
-- **Source:** `index.ts` (68 lines) + `redis.ts` (real `ioredis` adapter).
-- **Public API:** `CacheStore`, `CacheSetOptions`, `MemoryCache`, `MemoryCacheOptions`, `RedisCache`, `RedisCacheOptions`.
-- **Features:** `MemoryCache` — bounded LRU, TTL with injected clock, expiry purge, capacity enforcement, key/TTL validation. `RedisCache` — JSON-serialized values, native Redis TTL, `keyPrefix` namespace isolation, `increment`/`getMany`/`setMany` atomic operations, connection pooling via `ioredis`.
-- **Adapters:** `RedisCache` uses `ioredis` against a live Redis server.
-- **Tests:** 25 tests — 7 memory + 1 security + 17 real Redis integration tests (`tests/redis-integration.test.mjs`), covering set/get/delete/has, TTL expiry (real), increment, multi-key batching, namespace isolation, `clear()` scoping, and key/TTL validation.
-- **Missing:** Tags. Advanced invalidation patterns. Other distributed backends.
-- **Limitation:** Redis adapter verified against a live Redis 7 instance; memory cache remains the process-local development/test implementation.
+- **Source:** `index.ts`, `redis.ts`, plus Phase 4 modules `errors.ts`, `validation.ts`, `serialization.ts`, `namespace.ts`, `invalidation.ts`, `tags.ts`, `fallback.ts`, `stampede.ts`.
+- **Public API (core):** `CacheStore`, `CacheSetOptions`, `MemoryCache`, `MemoryCacheOptions`, `CacheError`, `CacheConfigurationError`, `CacheSerializationError`, `CacheStoreError`, validators, `serializeCacheValue`/`deserializeCacheValue`, `CacheNamespace`/`createNamespace`, invalidation helpers, `TaggedCache`, `InMemoryTagVersionSource`, `FallbackCache`, `StampedeGuard`, `computeTtlWithJitter`.
+- **Public API (subpaths):** `/redis` — `RedisCache`, `RedisTagVersionSource`, `REDIS_TAG_VERSION_PREFIX`; `/serialization`, `/namespace`, `/invalidation`, `/tags`, `/fallback`, `/stampede` re-export the corresponding modules so consumers never pull `ioredis` through the main entry.
+- **Features:** `MemoryCache` — bounded LRU, TTL with injected clock, expiry purge, capacity enforcement, `keys()` and `increment()`. `RedisCache` — strict `sveltex-cache:v1:` envelopes for `get`/`set`/`getMany`/`setMany`, Lua `increment()` that stays readable by `get()`, prefix-scoped `SCAN` for `keys()` and `clear()`, `disconnect()` always closes the client. Phase 4 adds typed errors; centralized key/TTL/tag/namespace validation (`MAX_KEY_LENGTH`, `MAX_TAG_LENGTH`, forbidden prototype-pollution tags); an exact `undefined` encoding with rejection of silent JSON coercion, corrupt/legacy payloads and `__proto__` keys; `CacheNamespace` with `encodeURIComponent`-escaped segments and prefix-scoped `clear()`; `invalidateKeys`/`invalidatePrefix`/`invalidateMatching`; `TaggedCache` generation envelopes with lazy physical deletion and a real Redis `INCR`/`MGET`/`SCAN` version source; `FallbackCache` (`healthy`/`degraded`/`probing`, `CacheStoreError` with `cause`, `lastError`/`failureCount`, observers, `probe()`, write-through, half-open recovery); and `StampedeGuard` (process-local single-flight, loader errors never cached, `computeTtlWithJitter`).
+- **Adapters:** `RedisCache` and `RedisTagVersionSource` use `ioredis` against a live Redis 7 server; fallback failure tests use a genuinely unreachable port (`127.0.0.1:6399`), never a fake provider.
+- **Tests:** 121 tests — runtime units (`serialization`, `errors`, `namespace`, `tags`, `fallback`, `stampede`), 15 security cases (`tests/security/phase4-security.test.mjs`), a public-API subpath type test (`tests/types/phase4.test.ts`), and real Redis 7 integration (`tests/redis-phase4-integration.test.mjs`).
+- **Missing (explicit, not advertised):** a distributed lock (`StampedeGuard` is process-local; TTL jitter only de-synchronizes expiry), other distributed backends, and SvelteKit `handle` wiring (Phase 10).
+- **Limitation:** fallback reads may be stale while degraded (documented in the README, not hidden); memory cache remains the process-local development/test implementation. Package version stays `0.1.0` with the workspace (bump deferred to Phase 11).
 
 #### `@sveltex/session` — ✅ Complete (Phase 3: cookies / CSRF / SQL store / revocation / auth bridge)
 

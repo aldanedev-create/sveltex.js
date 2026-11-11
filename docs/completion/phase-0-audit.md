@@ -20,8 +20,8 @@ added). Runtime tests are counted from real `pnpm -r test`, `pnpm check` = **488
 `pnpm test:security` = **77/77**, type-test projects = **16/16**. These are the **Phase 0
 snapshot** (a historical baseline retained for audit traceability); after Phase 1 the measured
 totals were **536/536 runtime / 86/86 security**, after Phase 2 **565/565 / 93/93**, and after
-Phase 3 (current) **637/637 runtime / 105/105 security** — see the
-[Phase 3 report](./phase-3-session.md).
+Phase 3 **637/637 runtime / 105/105 security**, and after Phase 4 (current)
+**734/734 runtime / 119/119 security** — see the [Phase 4 report](./phase-4-cache.md).
 
 | Package | src files | src lines | runtime tests | subpath exports | engines |
 |---|---:|---:|---:|---|---|
@@ -137,11 +137,22 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 > Redis 7 / SQLite), security findings SEC-035 – SEC-040, and public subpath exports. No new
 > package was created. Runtime 32 → 104, security 1 → 13.
 
-### Phase 4 — `@sveltex/cache`
+### Phase 4 — `@sveltex/cache` (completed 2026-11-11)
 | Requirement | State | Reality |
 |---|:---:|---|
-| Memory cache, Redis adapter, TTL, atomic ops | ✅ | `MemoryCache`, `RedisCache` |
-| **Namespaces, tag-based invalidation, graceful fallback** | ✗ | README explicitly says tags/advanced invalidation are **deferred** |
+| Memory cache, Redis adapter, TTL, atomic ops | ✅ | `MemoryCache`, `RedisCache` (Lua `increment`, prefix-scoped `keys()`/`clear()`) |
+| **Namespaces** | ✅ | `CacheNamespace` / `createNamespace` with `encodeURIComponent`-escaped physical key segments and scoped `clear()` |
+| **Cache invalidation** | ✅ | `invalidateKeys`, `invalidatePrefix`, `invalidateMatching` |
+| **Tag-based invalidation** | ✅ | `TaggedCache` + `InMemoryTagVersionSource` / `RedisTagVersionSource` (real `INCR`/`MGET`/`SCAN` generations, lazy stale deletion) |
+| **Serialization safety** | ✅ | Strict `sveltex-cache:v1:` envelope; cached `undefined` encoded exactly; corrupt/legacy/unsafe payloads throw `CacheSerializationError` |
+| **Error handling / graceful fallback** | ✅ | Typed `CacheError` hierarchy; `FallbackCache` with `healthy`/`degraded`/`probing`, `lastError`, observers and `probe()` |
+| **Stampede protection** | ✅ | `StampedeGuard` single-flight + `computeTtlWithJitter` (process-local; distributed lock explicitly **not** claimed) |
+| Real integration, no fakes | ✅ | Real Redis 7 for envelope/increment/keys/tag generations; genuinely unreachable port for fallback failure tests; 121 tests (15 security) |
+
+> **Phase 4 outcome (2026-11-11):** see the [Phase 4 report](./phase-4-cache.md). All former
+> gaps are closed with real implementations, real tests (real Redis 7), security findings
+> SEC-041 – SEC-046, and six new subpath exports. No new package was created. Runtime 24 → 121,
+> security 1 → 15; monorepo 637 → 734 runtime / 105 → 119 security.
 
 ### Phase 5 — `@sveltex/realtime`
 | Requirement | State | Reality |
@@ -235,19 +246,19 @@ real template capability demos), not as a from-scratch build.
 | Criterion | Now |
 |---|:---:|
 | All packages audited | ✅ this document |
-| Required functionality implemented | ◐ (Phases 0–3 done; 4–12 pending) |
+| Required functionality implemented | ◐ (Phases 0–4 done; 5–12 pending) |
 | Database supports built-in ORM integrations + custom adapters | ✅ Phase 1 done (Drizzle/Kysely + BYO) |
 | Public APIs / TypeScript types stable | ✅ (current surface) |
-| Unit/integration/security/type tests pass | ✅ 637 / 105 / 16 (Phase 3) |
+| Unit/integration/security/type tests pass | ✅ 734 / 119 / 16 (Phase 4) |
 | Packages build and install independently | ◐ (frozen install works; clean consumer install not verified) |
 | Cross-package scenarios work | ✗ (2 of 13) |
-| Documentation matches implementation | ✅ (Phase 3 doc sync complete) |
+| Documentation matches implementation | ✅ (Phase 4 doc sync complete) |
 | Generated apps build and run | ◐ (in-monorepo only) |
 | Production-readiness checks pass | ✗ |
 
 **Bottom line:** the repository is clean, honest, and fully tested for what it currently
-promises. Completion-plan Phases 0–3 (audit, database ORM integrations, auth, sessions) are
+promises. Completion-plan Phases 0–4 (audit, database ORM integrations, auth, sessions, cache) are
 delivered with real implementations, real integration tests and synced documentation; the
-measured gate is 637/637 runtime, 105/105 security, 16/16 type-test projects. Phases 4–12
-(cache, realtime, jobs, storage, mail, validation/testing, cross-package integration,
-production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 4.
+measured gate is 734/734 runtime, 119/119 security, 16/16 type-test projects. Phases 5–12
+(realtime, jobs, storage, mail, validation/testing, cross-package integration,
+production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 5.

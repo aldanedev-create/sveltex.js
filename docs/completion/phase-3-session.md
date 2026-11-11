@@ -3,7 +3,7 @@
 **Date:** 2026-11-11
 **Plan:** [Existing Package Completion Plan](../completion-plan.md) · **Audit:** [Phase 0](./phase-0-audit.md)
 **Package:** `@sveltex/session`
-**Status:** implemented, tested against real SQLite / PostgreSQL / MySQL / Redis, documented. Phase 3 done; Phases 4–12 remain.
+**Status:** implemented, tested against real SQLite / PostgreSQL / MySQL / Redis, documented. Phase 3 done; Phases 4–12 remain (historical status at the time of writing — Phase 4 has since been delivered; see the [Phase 4 report](./phase-4-cache.md)).
 
 ---
 

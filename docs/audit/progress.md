@@ -174,7 +174,7 @@
 
 1. Database: cross-process migration locking and connection retry/failover are not implemented. PostgreSQL/MySQL adapters, migrations, and pooling ship with real integration tests; built-in ORM integrations (Drizzle/Kysely) and BYO ORM support were delivered in Phase 1 (built-in Prisma/MikroORM/TypeORM remain BYO-only).
 2. Auth: password reset, email verification, RBAC, limiter and purpose-scoped tokens delivered in Phase 2. MFA and OAuth2/OIDC remain explicitly out of scope for this completion plan; cookie security is delivered by the session package's Phase 3.
-3. Cache: Redis adapter is done; tags and advanced invalidation are deferred.
+3. Cache: Redis adapter, strict serialization envelopes, escaped namespaces, tag/prefix/predicate invalidation, graceful fallback and process-local single-flight are delivered in Phase 4. A distributed lock (single-flight is process-local only) and non-Redis distributed backends are not shipped.
 4. Session: Redis shared store (atomic Lua), SQL `DatabaseSessionStore`, `__Host-` cookie transport, CSRF, per-user revocation and an auth bridge are all delivered in Phase 3. Remaining: SvelteKit `handle` wiring (Phase 10), cookie signing/encryption, O(1) Redis revocation.
 5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations, pooling, and ORM integrations (Drizzle/Kysely + BYO) are now delivered; the former session cookie transport/CSRF and package-level auth policy gaps are closed by Phases 2–3.
 6. Stage 4 adapters are explicitly process-local: `InProcessTransport` is not distributed, `InMemoryJobQueue` is not durable, `LocalStorageDriver` is local disk only, `TestTransport` never sends real mail, and `@sveltex/testing` fakes are in-memory only. Each README documents this; no untested provider is claimed.
@@ -190,7 +190,7 @@
 
 1. **CI / release:** Node/OS version matrix, fixture build job, `npm pack` + clean consumer install, coverage reporting, and publishing the workspace packages to a registry. Partially delivered in Session 7: CI now uses `--frozen-lockfile`, provisions PostgreSQL/MySQL/Redis services, and runs `pnpm check` + `pnpm test:security`; the matrix, coverage, pack verification and publish remain open.
 2. **Consumer-side verification (blocked on publish):** install → typecheck → build a CLI-generated app against published `@sveltex/*` packages. This is the one Stage 5 exit criterion not yet claimed.
-3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, SvelteKit `handle` wiring for the Phase 3 session primitives, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is now the active roadmap; its Phase 0 audit and Phase 1 database work are delivered (see Session 8).
+3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, SvelteKit `handle` wiring for the Phase 3 session primitives, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is the active roadmap; its Phases 0–4 are delivered (see Sessions 8–11) and Phase 5 (`@sveltex/realtime`) is next.
 
 Discipline reminder carried from the specification: ecosystem first, CLI last; no fake providers; no claiming untested support; never skip tests to force CI green.
 
@@ -331,4 +331,72 @@ has a real implementation and a real test; nothing is advertised that is not shi
 binding without a configured `secret`, and cross-process isolation beyond the database's own
 transaction semantics. All are documented in the Phase 3 report.
 
-**Next:** Phase 4 (`@sveltex/cache`) per the plan. Phases 4–12 remain.
+**Next:** Phase 4 (`@sveltex/cache`) per the plan — delivered in Session 11 below.
+
+---
+
+## Session 11 — Completion Plan: Phase 4 — `@sveltex/cache` (2026-11-11)
+
+Per the [Existing Package Completion Plan](../completion-plan.md) Phase 4, extended **only**
+`@sveltex/cache` — no new package was created. Full report:
+[`Phase 4 report`](../completion/phase-4-cache.md).
+
+- **XERJ first.** The local XERJ node (`http://127.0.0.1:9200`) was verified live and used to
+  locate the Phase 4 task list, the Phase 0 gap table and every stale "tags deferred" line.
+  A stale-index warning (`README.md` / `CHANGELOG.md` newer than the index) triggered an
+  incremental reindex (`xerj autoindex --workers 4`): 2133 records live, 33 duplicate
+  aliases, 0 junk records, graph 706 edges. The post-sync incremental run hit a frozen
+  `stale-resume-plan` (18 new Phase 4 files outside the plan), so a **`--fresh` rebuild** was
+  run: **427 files / 2292 records live / 32 duplicate aliases / 0 junk records / 0 junk or
+  skipped files**, `ax-docs` 2277 / `ax-packages-cli` 15, graph 1395 edges, exit 0. A follow-up
+  `xerj search` confirms the new report and `sveltex-cache:v1:` are indexed.
+- **Delivered (8 new source modules + 2 rewrites):** `errors.ts` (typed `CacheError` /
+  `CacheConfigurationError` / `CacheSerializationError` / `CacheStoreError` with `cause` and
+  `operation`); `validation.ts` (shared key/TTL/tag/namespace validators, forbidden prototype
+  tags); `serialization.ts` (strict `sveltex-cache:v1:` envelope, `u` for cached `undefined`,
+  `j` for strict JSON, `__proto__` dropped on parse); `namespace.ts` (`CacheNamespace`,
+  `createNamespace`, escaped `__sveltex_cache_ns__:` segments, scoped `clear()`);
+  `invalidation.ts` (`invalidateKeys` / `invalidatePrefix` / `invalidateMatching`);
+  `tags.ts` (`TaggedCache`, `InMemoryTagVersionSource`, generation envelopes, lazy stale
+  deletion); `fallback.ts` (`FallbackCache` with `healthy`/`degraded`/`probing`, observers,
+  `probe()`); `stampede.ts` (`StampedeGuard`, `computeTtlWithJitter`). `index.ts` was rewritten
+  to centralize validation, add `MemoryCache.keys()`/`increment()` and re-export every module.
+- **Redis hardened for real.** `redis.ts` now uses strict envelopes for `get`/`set`/`getMany`/
+  `setMany`, a server-side **Lua** `increment()` so counters stay readable by `get()`,
+  prefix-scoped `SCAN` for `keys()` and `clear()`, a real `RedisTagVersionSource` (`INCR`/
+  `MGET`/`SCAN`) and `createTagVersionSource()`; `setMany({ ttlMs: 0 })` deletes;
+  `disconnect()` always closes the client. `ioredis` remains a real dependency — no fake
+  adapter. Fallback failure tests use a genuinely unreachable port (`127.0.0.1:6399`).
+- **Public surface & version policy.** Six subpath exports (`/serialization`, `/namespace`,
+  `/invalidation`, `/tags`, `/fallback`, `/stampede`) plus `/redis`; the main entry stays free
+  of `ioredis`. The package version was briefly bumped to `0.2.0` and **reverted to `0.1.0`**
+  because the CLI integration registry enforces a single workspace version — the bump is
+  deferred to the Phase 11 release audit (documented in `CHANGELOG.md`).
+- **Fixed during implementation:** a failing serialization test exposed that
+  `JSON.stringify` calls `toJSON()` before the replacer (added `assertSerializable(value, '')`
+  root validation); `isTaggedEnvelope` was too permissive (tightened to require boolean
+  `hasData`, non-array object `gens`, present `data`); `jitterRatio` is validated before lookup
+  or loader start; `disconnect()` could leave reconnect timers; a wrong test import
+  (`RedisTagVersionSource` from `../dist/index.js` → `../dist/redis.js`); and the CLI version
+  registry break above. No test was skipped.
+- **Verification (measured 2026-11-11, live Redis 7 / PostgreSQL 16 / MySQL 8.0):**
+  `@sveltex/cache` → **121/121** (15 security) plus a public-API subpath type test; full
+  monorepo `pnpm check` → **734/734** runtime (0 failures, 0 skipped, 16 test projects),
+  `pnpm test:security` → **119/119** (15 packages), `pnpm test:types` → **16/16**.
+  `npm pack --dry-run --json` → **43 files**, 10 `dist/*.js` + 10 `dist/*.d.ts`, version
+  `0.1.0`, no `src`/`tests` leakage. Phase 3 → Phase 4: **+97 runtime, +14 security**.
+- **Docs synced:** `README.md`, `docs/roadmap.md`, `docs/specification.md` (cache row, package
+  table, totals, Stage-3 detail, Phase 2–4 baseline + Phase 4 verification section),
+  `docs/packages/README.md`, `docs/manifest.json` (39 documents), `docs/completion-plan.md`
+  (all 20 Phase 4 checkboxes), `docs/completion/phase-0-audit.md` (Phase 4 table + criteria),
+  `docs/audit/*` (README, package-status, testing-status, repository-audit,
+  security-findings SEC-041 – SEC-046, progress), `packages/cache/README.md` + `CHANGELOG.md`,
+  and the new [`Phase 4 report`](../completion/phase-4-cache.md).
+
+**Not claimed / still open:** a distributed lock (`StampedeGuard` is process-local; TTL jitter
+only de-synchronizes expiry), non-Redis distributed backends, SvelteKit `handle` wiring
+(Phase 10), and a package version bump (Phase 11). Fallback reads may be stale while degraded —
+documented in the README, not hidden. All are recorded in the Phase 4 report.
+
+**Next:** Phase 5 (`@sveltex/realtime`) per the plan. Phases 5–12 remain.
+

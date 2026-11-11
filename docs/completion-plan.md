@@ -322,31 +322,38 @@ Package: `@sveltex/cache`
 
 Provide consistent caching with local and distributed storage options.
 
+> **Delivered 2026-11-11 (completion-plan Phase 4).** Every task and test below is
+> implemented and verified — see the [`Phase 4 report`](./completion/phase-4-cache.md).
+> No new package was created; `@sveltex/cache` alone was extended. Measured gate:
+> **734/734 runtime, 119/119 security, 16/16 type-test projects**, 0 failures, 0 skipped.
+> Not claimed: a distributed lock (single-flight is process-local), non-Redis distributed
+> backends, SvelteKit `handle` wiring (Phase 10).
+
 ### Tasks
 
-- [ ] In-memory cache.
-- [ ] Redis adapter.
-- [ ] TTL support.
-- [ ] Cache expiration.
-- [ ] Atomic operations where supported.
-- [ ] Cache namespaces.
-- [ ] Cache invalidation.
-- [ ] Tag-based invalidation.
-- [ ] Serialization safety.
-- [ ] Error handling.
-- [ ] Connection lifecycle.
-- [ ] Graceful fallback behavior.
+- [x] In-memory cache.
+- [x] Redis adapter.
+- [x] TTL support.
+- [x] Cache expiration.
+- [x] Atomic operations where supported.
+- [x] Cache namespaces.
+- [x] Cache invalidation.
+- [x] Tag-based invalidation.
+- [x] Serialization safety.
+- [x] Error handling.
+- [x] Connection lifecycle.
+- [x] Graceful fallback behavior.
 
 ### Tests
 
-- [ ] TTL behavior.
-- [ ] Expiration.
-- [ ] Concurrent access.
-- [ ] Atomic operations.
-- [ ] Serialization.
-- [ ] Redis integration.
-- [ ] Connection failures.
-- [ ] Cache invalidation.
+- [x] TTL behavior.
+- [x] Expiration.
+- [x] Concurrent access.
+- [x] Atomic operations.
+- [x] Serialization.
+- [x] Redis integration.
+- [x] Connection failures.
+- [x] Cache invalidation.
 
 ---
 

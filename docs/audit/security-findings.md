@@ -22,7 +22,7 @@
 | SEC-011 | Info | AbortSignal | Database operations support AbortSignal for cancellation. Prevents resource exhaustion from long-running queries. | **Secure** |
 | SEC-012 | Low | Input validation | All packages validate input types and lengths (keys, SQL, emails, passwords, TTLs, session IDs). Bounds checking is comprehensive. | **Secure** |
 | SEC-013 | Info | Password hashing | `Argon2Hasher` uses Argon2id via `@node-rs/argon2` with sensible memory/time/parallelism defaults. Salts are unique per hash. Output is an opaque encoded string. Dummy hash shares the same algorithm/parameters as real hashes, preserving timing-mitigation parity. | **Secure** |
-| SEC-014 | Info | Cache key validation | `RedisCache` validates keys (non-empty, ≤1024 chars) and TTLs (non-negative finite) before issuing any command. Values are JSON-serialized; no user input is interpolated into Redis commands, preventing injection. `clear()` is scoped to the configured `keyPrefix` (avoids global `FLUSHDB`). | **Secure** |
+| SEC-014 | Info | Cache key validation | `RedisCache` validates keys (non-empty, ≤1024 chars) and TTLs (non-negative finite) before issuing any command; Phase 4 centralizes these checks in `validateCacheKey` / `validateCacheTtl` / `validateCacheTag` / `validateCacheNamespace` across every store. Values use the strict versioned `sveltex-cache:v1:` envelope (SEC-041) rather than bare JSON; no user input is interpolated into Redis commands, preventing injection. `clear()` and `keys()` are prefix-scoped `SCAN` (never `FLUSHDB`). | **Secure** |
 | SEC-015 | Info | Distributed session atomicity | `RedisSessionStore` implements `createIfAbsent`, `compareAndSet`, and `rotate` as server-side **Lua scripts** (`EVAL`), so the read-validate-write sequence is atomic across processes. This closes the TOCTOU window that a naive GET-then-SET store would expose (session resurrection / lost concurrent updates / rotation collisions). All values are JSON-serialized with no command interpolation; `clear()` is `SCAN`+`DEL` scoped to `keyPrefix` (never `FLUSHDB`); corrupt or logically expired records are purged on read; returned data is deeply cloned and frozen. | **Secure** |
 | SEC-016 | Info | Reference-app authorization boundary | `examples/reference-app` rejects client-supplied `roles` on registration (self-privilege-escalation); `admin` is granted only via trusted `adminEmails` bootstrap config. Every privileged call resolves the principal from a live session **plus a fresh `users` row** — never a cached or client-supplied role. `createPost` derives `authorId` from the session (payload `authorId` ignored); all SQL is parameterized; `grantRole` uses an allow-list and invalidates the cached profile; `rotateSession` is atomic; session IDs are validated before use. Covered by 18 integration tests. | **Secure** |
 | SEC-017 | Info | Realtime authorization boundary | `RealtimeHub` requires an explicit `authorize` hook (no implicit allow) and evaluates `deliver` **per subscriber**; delivered payloads are deep-frozen; channel names reject traversal/control characters; at-least-once redelivery is de-duplicated by a bounded **per-subscriber** id cache (an initial global-set design was corrected). 8 security tests. | **Secure** |
@@ -49,6 +49,12 @@
 | SEC-038 | Info | SQL session-store injection defence and single-statement atomicity | `DatabaseSessionStore` validates table names as simple SQL identifiers (rejects injection shapes), renders `?` for SQLite/MySQL and `$1..$n` for PostgreSQL, and binds every value through the executor — no user input reaches SQL text. `createIfAbsent` uses `INSERT … SELECT … WHERE NOT EXISTS`, `compareAndSet` uses `UPDATE … WHERE revision = ?`, and `rotate` runs in one transaction with a conditional `DELETE … WHERE revision = ?`. Corrupt/expired payloads are purged on read, not trusted. Verified against real SQLite, PostgreSQL 16 and MySQL 8.0; 8 concurrent racers yield exactly one winner. | **Secure** |
 | SEC-039 | Info | Session-fixation rotation via the auth bridge | `createAuthSessionPort(manager)` bridges `SessionManager` to `@sveltex/auth`'s `AuthSessionPort`; `create` stores `userId`, `destroy` logs out, and `rotate` rewrites the cookie with a new id while invalidating the old one. Verified end-to-end with a **real `AuthService` + `Argon2Hasher`** (register → login → rotate → revoke → logout). A public-API type test proves the bridge satisfies `AuthSessionPort<SessionHandle<Data>>`. | **Secure** |
 | SEC-040 | Info | Honest per-user revocation | `revokeAllForUser` is a first-class `SessionManager` method over a `RevocableSessionStore` port (memory/Redis/SQL). Stores that cannot support it throw `SessionRevocationUnsupportedError` instead of silently succeeding. The Redis implementation is a namespace-scoped `SCAN` with `keyPrefix` isolation and is documented as **O(N)** — no false O(1) claim. Denormalized `user_id` allows O(1) SQL revocation. | **Secure (with documented O(N) caveat)** |
+| SEC-041 | Info | Strict cache wire envelope | `serializeCacheValue` emits a versioned `sveltex-cache:v1:` prefix with a `u` tag for cached `undefined` and a `j` tag for strict JSON. Root validation runs **before** `JSON.stringify`, so `Date.toJSON()`, `Map`/`Set`/class instances and typed arrays cannot silently become a different type; BigInt, symbol, function, circular, non-finite and accessor values throw `CacheSerializationError`. `deserializeCacheValue` rejects corrupt, legacy or forged payloads rather than turning them into silent cache misses, and drops `__proto__` on parse. | **Secure** |
+| SEC-042 | Info | Cache key / TTL / tag / namespace validation | `validateCacheKey` (≤1024 chars), `validateCacheTtl`, `validateCacheTag` (`^[A-Za-z0-9._:-]+$`, ≤256 chars, `__proto__`/`constructor`/`prototype` rejected) and `validateCacheNamespace` are shared by every store and decorator. No user input is interpolated into Redis commands; `clear()` and `keys()` remain prefix-scoped (`SCAN`, never `FLUSHDB`). | **Secure** |
+| SEC-043 | Info | Namespace boundary escaping | `CacheNamespace` prefixes physical keys with `encodeURIComponent(namespace)` under `__sveltex_cache_ns__:`, so a namespace containing `:` or other delimiter-shaped characters cannot collide with or read another namespace's keys. `clear()` deletes only keys decodable within the namespace; prefix/predicate invalidation operates on decoded logical keys. | **Secure** |
+| SEC-044 | Info | Tag invalidation integrity | `TaggedCache` stores a serialized generation envelope and compares every tag generation on read; stale entries are lazily deleted rather than served. A tightened `isTaggedEnvelope` guard requires boolean `hasData`, a non-array object `gens` and a present `data` field, so forged payloads are rejected. `RedisTagVersionSource` bumps generations with real `INCR` and reads them with `MGET`/`SCAN`; forbidden tags are rejected before any command is issued. | **Secure** |
+| SEC-045 | Info | Backend error observability (no silent failure) | Primary-store failures in `FallbackCache` are wrapped in `CacheStoreError` with `operation` and `cause`; `lastError`, `failureCount`, `state`, `onError`, `onStateChange` and `probe()` expose degradation, and observer exceptions are contained. The fallback is never advertised as fresh — stale reads while degraded are explicitly documented in the README. | **Secure (with documented stale-read caveat)** |
+| SEC-046 | Info | Stampede / loader-failure semantics | `StampedeGuard` coalesces concurrent loads per key (process-local single-flight) and applies TTL jitter; `jitterRatio` is validated before any cache lookup or loader starts. Loader failures are never cached and never poison the in-flight map. TTL jitter is explicitly **not** a distributed lock and is documented as such. | **Secure (with documented process-local caveat)** |
 
 ---
 
@@ -107,6 +113,7 @@
 - Rotation remains **explicit** — Phase 3 ships concrete rotation helpers (`SessionCookieTransport.rotate`, `createAuthSessionPort().rotate`) but no automatic framework middleware (Phase 10).
 - ~~Cookie transport, signing, and CSRF are adapter responsibilities.~~ **Resolved:** `__Host-` secure cookie transport and double-submit CSRF (optional HMAC binding) now ship in `@sveltex/session` (SEC-035 – SEC-037). Cookie **signing/encryption** and stateless sessions are still not offered — ids remain opaque random values looked up in the store.
 - `MemorySessionStore` is single-process only; `RedisSessionStore` revocation is an O(N) namespace `SCAN` (SEC-040).
+- Cache values written before the Phase 4 envelope change are rejected as legacy payloads, not silently decoded; a `FallbackCache` in the `degraded` state may serve stale reads, and `StampedeGuard` does not coordinate across processes (SEC-041, SEC-045, SEC-046).
 
 ### Input validation coverage
 
@@ -248,6 +255,41 @@ update conflicts, failing stores and shutdown. All 12 pass with 0 skipped.
   database's own transaction isolation level. These remain application/framework integration
   work (Phase 10) and are recorded in the Phase 3 report as open items.
 
+### Completion-plan Phase 4 — cache security review (SEC-041 – SEC-046)
+
+**Status: Secure (with documented limitations)**
+
+The dedicated suite is `packages/cache/tests/security/phase4-security.test.mjs` (14 cases; with
+the pre-existing cache security case the package ships 15 security tests). It covers `__proto__`
+envelope pollution, corrupt and forged wire payloads, forged tagged envelopes, tag pollution
+rejection, namespace boundary encoding, circular references, NaN/Infinity, bounded keys/tags,
+backend error observability, loader-error non-caching and strict root-value rejection. All pass
+with **0 skipped**. Real Redis 7 integration (`tests/redis-phase4-integration.test.mjs`)
+additionally verifies envelope-compatible Lua `increment`, prefix-scoped `keys()`, distributed
+tag generations via `INCR`/`MGET`, and fallback against a genuinely unreachable port
+(`127.0.0.1:6399`) — no fake provider and no substituted backend.
+
+- **Serialization boundary (SEC-041, SEC-042).** The old adapter JSON-serialized arbitrary
+  values, which silently coerced `undefined`, `Date`, `BigInt` and class instances. Phase 4
+  introduces a versioned envelope with an explicit root check (necessary because
+  `JSON.stringify` invokes `toJSON()` before its replacer) and a strict `assertSerializable`
+  walk. Corrupt or legacy payloads now raise `CacheSerializationError`; a tainted Redis value
+  can no longer degrade silently into a cache miss or a wrongly-typed hit.
+- **Invalidation boundary (SEC-043, SEC-044).** Namespace keys are escaped before they reach
+  the physical store, so a crafted namespace cannot read or clear another tenant's entries.
+  Tag invalidation is generation-based, not deletion-scan-based: a bumped generation makes
+  every dependent entry stale on the next read. The envelope shape guard was tightened after
+  review so a forged object cannot be mistaken for a valid tagged entry.
+- **Degradation boundary (SEC-045, SEC-046).** Falling back to a secondary store is observable
+  (`state`, `lastError`, `failureCount`, callbacks, `probe()`), and half-open recovery is
+  explicit. Failed loads are never cached, so a transient loader error cannot be pinned into
+  the cache. The circuit breaker degrades **availability**, not integrity: stale fallback reads
+  are documented rather than hidden.
+- **Not claimed.** `StampedeGuard` is **process-local**; TTL jitter only de-synchronizes
+  expiration across processes and does not implement a distributed lock or lease. No
+  non-Redis distributed backend ships, and no SvelteKit `handle` wiring exists (Phase 10).
+  These are recorded in the [Phase 4 report](../completion/phase-4-cache.md), not hidden.
+
 ## Recommendations
 
 1. **Add default rate limiting guidance** to Auth README with example limiter implementations (token bucket, sliding window).
@@ -255,3 +297,4 @@ update conflicts, failing stores and shutdown. All 12 pass with 0 skipped.
 3. ~~**Add CSRF guidance**~~ — **delivered in Phase 3**: `CsrfProtection` ships with a documented unbound-mode caveat, HMAC session binding option, and 12 security cases. The README documents when to configure `secret`; automatic framework middleware remains Phase 10.
 4. **Add security test for config metadata** — verify that `__proto__` injection attempts in nested metadata are rejected (current tests cover top-level; nested should be verified).
 5. **Add timing test for auth login** — measure that user-absent and user-present-but-wrong-password paths take similar time.
+6. **Evaluate a distributed cache lock/lease** — Phase 4 single-flight is process-local; a Redis `SET NX` lease should be designed and tested before multi-process stampede protection is advertised (Phase 10/11).
