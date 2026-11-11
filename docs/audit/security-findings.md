@@ -1,6 +1,6 @@
 # SvelteX Security Findings
 
-**Audit date:** 2026-11-08  
+**Audit date:** 2026-11-11  
 **Auditor:** Security engineer
 
 ---
@@ -14,9 +14,9 @@
 | SEC-003 | Info | Timing attacks | Auth service verifies a precomputed dummy hash when the user is absent, reducing timing-based user enumeration. Dummy hash length is validated (20–4096 chars). | **Secure** |
 | SEC-004 | Info | Credential exposure | Auth `sanitizeUser` strips `passwordHash` before returning user objects. Results are deep-frozen. | **Secure** |
 | SEC-005 | Info | SQL injection | Database package never constructs SQL from user input. Parameterized queries only. SQL length validated (max 1,000,000 chars). Parameter types validated. | **Secure** |
-| SEC-006 | Info | Session fixation | Session rotation is implemented with atomic compare-and-set. However, rotation is not automatic — applications must call `rotate()` explicitly after privilege changes. | **Secure (with caveat)** |
+| SEC-006 | Info | Session fixation | Session rotation is implemented with atomic compare-and-set. Rotation is still **explicit**, not automatic middleware, but Phase 3 adds two concrete rotation points: `SessionCookieTransport.rotate()` and `createAuthSessionPort().rotate()` rewrite the cookie and invalidate the old id on privilege change. | **Secure (with caveat)** |
 | SEC-007 | Low | Rate limiting | Auth attempt limiter is optional (`options.limiter`). Production deployments must supply one; no default rate limiting is provided. | **Documented** |
-| SEC-008 | Low | CSRF | Session package explicitly excludes cookie transport and CSRF from its scope. Adapter/framework responsibility. | **Documented** |
+| SEC-008 | Low | CSRF | ~~Excluded from the session package.~~ **Resolved in completion-plan Phase 3**: `CsrfProtection` (double-submit + constant-time compare + optional HMAC session binding) and `__Host-` secure cookie transport are shipped. See SEC-035 – SEC-040. Automatic framework middleware is still not shipped. | **Fixed (Phase 3)** |
 | SEC-009 | Low | Secret handling | No secrets are hardcoded. Config metadata rejects functions/symbols/bigints. No environment variable reading in packages (by design). | **Secure** |
 | SEC-010 | Info | Immutable results | All package return values are frozen. Config is deep-frozen. Session records are frozen. Cache entries are immutable. | **Secure** |
 | SEC-011 | Info | AbortSignal | Database operations support AbortSignal for cancellation. Prevents resource exhaustion from long-running queries. | **Secure** |
@@ -43,6 +43,12 @@
 | SEC-032 | Info | ORM adapter error and health redaction | `connect`/`healthCheck`/conformance failures are wrapped as `DatabaseAdapterError` with a fixed message — connection strings, passwords and tokens from driver errors never reach callers, health reports, or `runAdapterConformance` output (which substitutes `[redacted]`). | **Secure** |
 | SEC-033 | Info | Passive environment configuration | `configFromEnv` collects values verbatim but never evaluates or executes them; the resulting config is frozen. `redactConfig` masks password/token fields while leaving non-secret fields readable. No env value is logged by default. | **Secure** |
 | SEC-034 | Info | Optional-peer isolation (no silent fake) | The main entry and `contracts`/`core`/`testing` subpaths import no ORM; built-in Drizzle/Kysely adapters require their declared optional peer and fail loudly (`ERR_MODULE_NOT_FOUND`) when it is absent. Verified by an isolation test with both ORMs removed. No fallback or fake adapter is substituted. | **Secure** |
+| SEC-035 | Info | `__Host-` secure cookie defaults and Set-Cookie injection | `resolveSessionCookieOptions` returns frozen defaults (`Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`) and rejects any downgrade under the `__Host-` prefix, `SameSite=None`/`Partitioned` without `Secure`, invalid `maxAge`, and CRLF/semicolon/control-character injection in names, values and paths. `serializeSetCookie` is a pure, injection-safe serializer. 18 cookie tests + security cases. | **Secure** |
+| SEC-036 | Info | CSRF double-submit with constant-time compare and optional HMAC binding | Safe methods (`GET/HEAD/OPTIONS/TRACE`) bypass; every other method requires a header or form token matching the double-submit cookie. Comparison is performed on fixed-length SHA-256 digests with `timingSafeEqual` (no early-exit leak). When a `secret` is configured, tokens are HMAC-bound to a session id so a token minted for one session cannot protect another. The CSRF cookie is `__Host-`-prefixed and `SameSite=Strict` but deliberately not HttpOnly (JS must read it). Stable `CsrfError` codes; 16 tests + 12 security cases. | **Secure (with documented unbound-mode caveat)** |
+| SEC-037 | Info | Cookie-header parsing and stale-cookie handling | `parseCookieHeader` returns a null-prototype record, first-duplicate-wins, percent-decodes values, and blocks `__proto__`/`prototype`/`constructor` pollution. `SessionCookieTransport.read()` validates the id shape, resolves it through `SessionManager` (enforcing expiry), and **clears** the cookie when the id is malformed or the session is missing — an attacker-controlled cookie cannot fabricate a session or cause a 500. `Max-Age` derives from the remaining TTL via the same injected clock. | **Secure** |
+| SEC-038 | Info | SQL session-store injection defence and single-statement atomicity | `DatabaseSessionStore` validates table names as simple SQL identifiers (rejects injection shapes), renders `?` for SQLite/MySQL and `$1..$n` for PostgreSQL, and binds every value through the executor — no user input reaches SQL text. `createIfAbsent` uses `INSERT … SELECT … WHERE NOT EXISTS`, `compareAndSet` uses `UPDATE … WHERE revision = ?`, and `rotate` runs in one transaction with a conditional `DELETE … WHERE revision = ?`. Corrupt/expired payloads are purged on read, not trusted. Verified against real SQLite, PostgreSQL 16 and MySQL 8.0; 8 concurrent racers yield exactly one winner. | **Secure** |
+| SEC-039 | Info | Session-fixation rotation via the auth bridge | `createAuthSessionPort(manager)` bridges `SessionManager` to `@sveltex/auth`'s `AuthSessionPort`; `create` stores `userId`, `destroy` logs out, and `rotate` rewrites the cookie with a new id while invalidating the old one. Verified end-to-end with a **real `AuthService` + `Argon2Hasher`** (register → login → rotate → revoke → logout). A public-API type test proves the bridge satisfies `AuthSessionPort<SessionHandle<Data>>`. | **Secure** |
+| SEC-040 | Info | Honest per-user revocation | `revokeAllForUser` is a first-class `SessionManager` method over a `RevocableSessionStore` port (memory/Redis/SQL). Stores that cannot support it throw `SessionRevocationUnsupportedError` instead of silently succeeding. The Redis implementation is a namespace-scoped `SCAN` with `keyPrefix` isolation and is documented as **O(N)** — no false O(1) claim. Denormalized `user_id` allows O(1) SQL revocation. | **Secure (with documented O(N) caveat)** |
 
 ---
 
@@ -97,10 +103,10 @@
 - Data is deep-cloned on read to prevent external mutation.
 - Expired sessions are deleted on access.
 
-**Caveats:**
-- Rotation is manual, not automatic after login.
-- Cookie transport, signing, and CSRF are adapter responsibilities.
-- `MemorySessionStore` is single-process only.
+**Caveats (updated after completion-plan Phase 3):**
+- Rotation remains **explicit** — Phase 3 ships concrete rotation helpers (`SessionCookieTransport.rotate`, `createAuthSessionPort().rotate`) but no automatic framework middleware (Phase 10).
+- ~~Cookie transport, signing, and CSRF are adapter responsibilities.~~ **Resolved:** `__Host-` secure cookie transport and double-submit CSRF (optional HMAC binding) now ship in `@sveltex/session` (SEC-035 – SEC-037). Cookie **signing/encryption** and stateless sessions are still not offered — ids remain opaque random values looked up in the store.
+- `MemorySessionStore` is single-process only; `RedisSessionStore` revocation is an O(N) namespace `SCAN` (SEC-040).
 
 ### Input validation coverage
 
@@ -210,10 +216,42 @@ caller and preserved untouched), so SQL injection remains the ORM's own responsi
 
 ---
 
+### Completion-plan Phase 3 — session security review (SEC-035 – SEC-040)
+
+**Status: Secure (with documented limitations)**
+
+The dedicated suite is `packages/session/tests/security/phase3-security.test.mjs` (12 of the 13
+session security cases). It covers Set-Cookie injection, `__Host-` default hardening, `__proto__`
+cookie pollution, forged/mismatched CSRF tokens, session fixation, stale cookies, concurrent
+update conflicts, failing stores and shutdown. All 12 pass with 0 skipped.
+
+- **Cookie boundary (SEC-035, SEC-037).** Defaults fail closed: a browser rejects a `__Host-`
+  cookie that is not `Secure`, not root-path, or domain-scoped, and `resolveSessionCookieOptions`
+  refuses to emit one. CRLF and semicolon injection in any cookie component throws. Parsing uses
+  a null-prototype record, so a malicious `__proto__` key cannot reach `Object.prototype`.
+  Stale/malformed cookies are cleared rather than trusted.
+- **CSRF boundary (SEC-036).** Unsafe methods require a matching double-submit token compared
+  in constant time over SHA-256 digests. With `secret` configured, tokens are HMAC-bound to a
+  session id. **Documented limitation:** without a `secret`, only token *shape* is verified and
+  protection relies on the `__Host-` prefix + `SameSite=Strict`; hostile-origin deployments must
+  configure `secret`. This is stated in the README and the [Phase 3 report](../completion/phase-3-session.md),
+  not hidden.
+- **SQL boundary (SEC-038).** Table identifiers are validated; all values are bound; dialect
+  placeholders are rendered deterministically (`?` / `$1..$n`). Conditional single statements
+  and a transactional `rotate` close the TOCTOU window that a read-then-write store would open.
+  Corrupt or expired rows are purged on read.
+- **Auth bridge and revocation (SEC-039, SEC-040).** Rotation-on-privilege-change is exercised
+  with a real `AuthService` + `Argon2Hasher`. `revokeAllForUser` never reports a silent success:
+  unsupported stores throw. Redis revocation is explicitly O(N).
+- **Not claimed.** No SvelteKit `handle` hook, no automatic CSRF/session middleware, no cookie
+  signing/encryption or stateless sessions, no guarantee of cross-process isolation beyond the
+  database's own transaction isolation level. These remain application/framework integration
+  work (Phase 10) and are recorded in the Phase 3 report as open items.
+
 ## Recommendations
 
 1. **Add default rate limiting guidance** to Auth README with example limiter implementations (token bucket, sliding window).
-2. **Document session rotation best practices** — recommend calling `rotate()` after login and privilege escalation.
-3. **Add CSRF guidance** to Session README — recommend SvelteKit's built-in CSRF protection or `@sveltejs/kit` origin checking.
+2. ~~**Document session rotation best practices**~~ — **delivered in Phase 3**: `SessionCookieTransport.rotate()` and `createAuthSessionPort().rotate()` implement rotation-on-privilege-change and are covered by a real AuthService integration test plus a session-fixation security case. Automatic middleware remains Phase 10.
+3. ~~**Add CSRF guidance**~~ — **delivered in Phase 3**: `CsrfProtection` ships with a documented unbound-mode caveat, HMAC session binding option, and 12 security cases. The README documents when to configure `secret`; automatic framework middleware remains Phase 10.
 4. **Add security test for config metadata** — verify that `__proto__` injection attempts in nested metadata are rejected (current tests cover top-level; nested should be verified).
 5. **Add timing test for auth login** — measure that user-absent and user-present-but-wrong-password paths take similar time.

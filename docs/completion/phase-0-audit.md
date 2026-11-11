@@ -18,8 +18,10 @@ blunt: passing unit tests are not treated as proof of production readiness.
 Workspace contains **15 implemented packages** (the plan's "no new packages" rule — none were
 added). Runtime tests are counted from real `pnpm -r test`, `pnpm check` = **488/488**,
 `pnpm test:security` = **77/77**, type-test projects = **16/16**. These are the **Phase 0
-snapshot**; after Phase 1 the measured totals are **536/536 runtime** and **86/86 security**
-(see [Phase 1 report](./phase-1-database.md)).
+snapshot** (a historical baseline retained for audit traceability); after Phase 1 the measured
+totals were **536/536 runtime / 86/86 security**, after Phase 2 **565/565 / 93/93**, and after
+Phase 3 (current) **637/637 runtime / 105/105 security** — see the
+[Phase 3 report](./phase-3-session.md).
 
 | Package | src files | src lines | runtime tests | subpath exports | engines |
 |---|---:|---:|---:|---|---|
@@ -121,13 +123,19 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 | Token expiration / revocation / session fixation | ✅ | `TokenManager` enforces expiry + single-use revocation; reset/verify tokens are subject-bound |
 | RBAC / permission checks | ✅ | `RbacBuilder` / `createRbac`: deny-by-default, role inheritance, `requirePermission` (401/403) |
 
-### Phase 3 — `@sveltex/session`
+### Phase 3 — `@sveltex/session` (completed 2026-11-11)
 | Requirement | State | Reality |
 |---|:---:|---|
-| Create / get / destroy / rotate / expire / revoke | ✅ | `SessionManager` + `RedisSessionStore` (Lua atomicity) |
-| Concurrent request safety | ✅ | tested |
-| **Cookie configuration, secure defaults, CSRF integration** | ✗ | explicitly documented as outside the package (`Limitations`) |
-| Persistent stores | ✅ | `./redis`; no SQL/session-store adapter |
+| Create / get / destroy / rotate / expire / revoke | ✅ | `SessionManager` + `RedisSessionStore` (Lua atomicity); `revokeAllForUser` now a first-class `SessionManager` method |
+| Concurrent request safety | ✅ | tested; 8-way concurrent `createIfAbsent` yields exactly 1 winner |
+| **Cookie configuration, secure defaults, CSRF integration** | ✅ | **closed**: `__Host-` frozen defaults + `SessionCookieTransport`, `CsrfProtection` (double-submit + optional HMAC binding) |
+| Persistent stores | ✅ | `./redis` + **`./database` `DatabaseSessionStore`** (real SQLite/PostgreSQL/MySQL integration tests) |
+| Authentication integration | ✅ | `./auth` `createAuthSessionPort`, verified with a real `AuthService` + `Argon2Hasher` |
+
+> **Phase 3 outcome (2026-11-11):** see the [Phase 3 report](./phase-3-session.md). All four
+> original gaps are closed with real implementations, real tests (real PostgreSQL 16 / MySQL 8.0 /
+> Redis 7 / SQLite), security findings SEC-035 – SEC-040, and public subpath exports. No new
+> package was created. Runtime 32 → 104, security 1 → 13.
 
 ### Phase 4 — `@sveltex/cache`
 | Requirement | State | Reality |
@@ -227,17 +235,19 @@ real template capability demos), not as a from-scratch build.
 | Criterion | Now |
 |---|:---:|
 | All packages audited | ✅ this document |
-| Required functionality implemented | ✗ (Phases 1–12 pending) |
+| Required functionality implemented | ◐ (Phases 0–3 done; 4–12 pending) |
 | Database supports built-in ORM integrations + custom adapters | ✅ Phase 1 done (Drizzle/Kysely + BYO) |
 | Public APIs / TypeScript types stable | ✅ (current surface) |
-| Unit/integration/security/type tests pass | ✅ 536 / 86 / 16 (Phase 1) |
+| Unit/integration/security/type tests pass | ✅ 637 / 105 / 16 (Phase 3) |
 | Packages build and install independently | ◐ (frozen install works; clean consumer install not verified) |
 | Cross-package scenarios work | ✗ (2 of 13) |
-| Documentation matches implementation | ◐ (known drift listed above) |
+| Documentation matches implementation | ✅ (Phase 3 doc sync complete) |
 | Generated apps build and run | ◐ (in-monorepo only) |
 | Production-readiness checks pass | ✗ |
 
 **Bottom line:** the repository is clean, honest, and fully tested for what it currently
-promises — but the completion plan requires substantially more real integration work. The next
-action is Phase 1 (Database ORM integrations + BYO ORM), executed with real integration tests
-and no fake providers.
+promises. Completion-plan Phases 0–3 (audit, database ORM integrations, auth, sessions) are
+delivered with real implementations, real integration tests and synced documentation; the
+measured gate is 637/637 runtime, 105/105 security, 16/16 type-test projects. Phases 4–12
+(cache, realtime, jobs, storage, mail, validation/testing, cross-package integration,
+production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 4.

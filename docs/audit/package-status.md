@@ -1,6 +1,6 @@
 # SvelteX Package Status
 
-**Last updated:** 2026-11-08  
+**Last updated:** 2026-11-11  
 **Verification environment:** Node 22.13.1, pnpm 10.20.0, TypeScript 5.9.3
 
 ---
@@ -17,7 +17,7 @@
 | `@sveltex/validation` | ✅ Pass | ✅ Pass | ✅ 8/8 | ✅ 1/1 | ✅ Pass | **Stage 3 — Ready** |
 | `@sveltex/auth` | ✅ Pass | ✅ Pass | ✅ 58/58 | ✅ 8/8 | ✅ Pass | **Stage 3 — Complete (Argon2id + reset/verification/RBAC/limiter/tokens)** |
 | `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
-| `@sveltex/session` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 1/1 | ✅ Pass | **Stage 3 — Partial (Redis done)** |
+| `@sveltex/session` | ✅ Pass | ✅ Pass | ✅ 104/104 | ✅ 13/13 | ✅ Pass | **Stage 3 — Complete (cookies + CSRF + SQL store + revocation + auth bridge)** |
 | `@sveltex/example-reference-app` | ✅ Pass | ✅ Pass | ✅ 18/18 | N/A | ✅ Pass | **Stage 3 — Exit criterion met** |
 | `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 25/25 | ✅ 8/8 | ✅ Pass | **Stage 4 — Ready (process-local)** |
 | `@sveltex/jobs` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 7/7 | ✅ Pass | **Stage 4 — Ready (process-local)** |
@@ -26,7 +26,7 @@
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **536/536** | **86/86** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **637/637** | **105/105** | **16/16** | **All pass** |
 
 ---
 
@@ -114,15 +114,17 @@
 - **Missing:** Tags. Advanced invalidation patterns. Other distributed backends.
 - **Limitation:** Redis adapter verified against a live Redis 7 instance; memory cache remains the process-local development/test implementation.
 
-#### `@sveltex/session` — ⚠️ Partial (Redis adapter implemented, transport pending)
+#### `@sveltex/session` — ✅ Complete (Phase 3: cookies / CSRF / SQL store / revocation / auth bridge)
 
-- **Source:** `index.ts` (98 lines) + `redis.ts` (real `ioredis` adapter).
-- **Public API:** `SessionManager`, `SessionStore`, `SessionRecord`, `SessionHandle`, `SessionManagerOptions`, `MemorySessionStore`, `SessionConflictError`, `RedisSessionStore`, `RedisSessionStoreOptions` (via `@sveltex/session/redis`).
-- **Features:** Revision-based compare-and-set. Atomic rotate. Collision retry with configurable attempts. URL-safe ID validation. Deep-cloned/frozen data. Expiry checking. `touch()` for sliding expiration.
-- **Adapters:** `RedisSessionStore` uses `ioredis` + three server-side **Lua scripts** (`EVAL`) so `createIfAbsent` (SET-NX semantics), `compareAndSet` (CAS on stored revision), and `rotate` (atomic old→new move) are genuinely atomic across processes. Records are JSON values under `<keyPrefix><id>` with a physical TTL derived from `expiresAt`. `clear()` uses `SCAN`+`DEL` scoped to the prefix (never `FLUSHDB`). Corrupt/expired records are purged on read. Reads return deeply frozen clones.
-- **Tests:** 32 tests — 12 unit/security + 20 real Redis integration tests (`tests/redis-session-integration.test.mjs`), covering CAS/rotate/createIfAbsent atomicity under contention, cross-connection session sharing, namespace isolation, logical + physical expiry, corrupt-data purge, and full `SessionManager` lifecycle. Plus a `./redis` public-API type test.
-- **Missing:** Database-backed store. Cookie transport. CSRF integration. Session fixation auto-rotation.
-- **Limitation:** Redis adapter verified against a live Redis 7 instance; memory store remains the process-local development/test implementation.
+- **Source:** `index.ts`, `redis.ts`, `cookie.ts`, `csrf.ts`, `database.ts`, `auth.ts`.
+- **Public API (core):** `SessionManager`, `SessionStore`, `SessionRecord`, `SessionHandle`, `SessionManagerOptions`, `MemorySessionStore`, `SessionConflictError`, `RevocableSessionStore`, `SessionRevocationUnsupportedError`, `SessionManager.revokeAllForUser`, `RedisSessionStore`, `RedisSessionStoreOptions` (via `@sveltex/session/redis`).
+- **Public API (subpaths):** `@sveltex/session/cookie` — `resolveSessionCookieOptions`, `serializeSetCookie`, `parseCookieHeader`, `SessionCookieTransport`, `CookieJar`, `SessionCookieError`, `DEFAULT_SESSION_COOKIE_OPTIONS`; `@sveltex/session/csrf` — `CsrfProtection`, `serializeCsrfCookie`, `constantTimeEqual`, `CsrfError`, `CSRF_*` codes; `@sveltex/session/database` — `DatabaseSessionStore`, `SessionSqlExecutor`, `SessionDatabaseDialect`, `DatabaseSessionStoreOptions`; `@sveltex/session/auth` — `createAuthSessionPort`, `supportsRevocation`, `revokeAllForUser`, `AuthSessionPortLike`.
+- **Features:** Revision-based compare-and-set, atomic rotate, collision retry, URL-safe ID validation, deep-cloned/frozen data, expiry checking, `touch()`. Phase 3 adds `__Host-` secure cookie defaults (`Secure`/`HttpOnly`/`SameSite=Lax`/`Path=/`, no `Domain`) with CRLF/semicolon injection rejection and `__proto__`-safe parsing; `SessionCookieTransport` (create/read/write/clear/rotate/destroy, `Max-Age` from remaining TTL, stale cookies cleared); double-submit `CsrfProtection` with optional HMAC session binding and constant-time compare; persistent `DatabaseSessionStore` with dialect-aware placeholders and single-statement atomicity; per-user revocation; and an `AuthSessionPort` bridge that rotates on privilege change.
+- **Adapters:** `RedisSessionStore` (`ioredis` + three server-side Lua `EVAL` scripts, prefix-scoped `clear()`, namespace `SCAN` revocation). `DatabaseSessionStore` (structural `SessionSqlExecutor`; `@sveltex/database`'s `Database` satisfies it — proven by a type test; `sqlite`/`postgres`/`mysql` dialects; conditional `INSERT`/`UPDATE`, transactional `rotate`). `MemorySessionStore` supports `revokeAllForUser` too. Stores that cannot revoke throw `SessionRevocationUnsupportedError` rather than silently succeeding.
+- **Tests:** 104 — 91 runtime + 13 security. New: `cookie.test.mjs` (18), `csrf.test.mjs` (16), `database.test.mjs` (17), `auth.test.mjs` (8), `security/phase3-security.test.mjs` (12), `types/phase3.test.ts`. Real integration: SQLite (`node:sqlite`) always; PostgreSQL 16 / MySQL 8.0 / Redis 7 when reachable; a real `@sveltex/auth` `AuthService` + `Argon2Hasher` register → login → rotate → revoke → logout flow; 8 concurrent `createIfAbsent` racers yield exactly 1 winner.
+- **Delivered:** database-backed store, cookie transport, CSRF protection, session-fixation rotation, per-user revocation. `npm pack --dry-run` → 27 files, all four new subpath `.js`/`.d.ts` pairs present, no src/test leakage.
+- **Not claimed:** SvelteKit `handle` hook / automatic middleware (Phase 10), cookie signing/encryption or stateless sessions, O(1) Redis revocation (`SCAN` is O(N)), HMAC CSRF binding without a configured `secret`, cross-process isolation beyond the database's own transaction semantics.
+- **Limitation:** Redis, PostgreSQL and MySQL adapters are verified against live services; the memory store remains the process-local development/test implementation.
 
 ### Stage 3 — Reference application (exit criterion)
 

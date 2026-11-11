@@ -1,6 +1,6 @@
 # SvelteX Progress Log
 
-**Last updated:** 2026-11-08
+**Last updated:** 2026-11-11
 
 ---
 
@@ -104,18 +104,18 @@
 - [ ] **Database**: Built-in Prisma / MikroORM / TypeORM adapters — BYO ORM only; not claimed (custom adapters supported via `defineDatabaseAdapter`)
 - [x] **Database**: Real integration tests for PostgreSQL/MySQL — ✅ 24 integration tests against real servers
 - [x] **Auth**: Implement Argon2id password hashing (`@node-rs/argon2`) — ✅ done, 13 real integration tests
-- [ ] **Auth**: Implement password reset flow
-- [ ] **Auth**: Implement email verification
-- [ ] **Auth**: Implement authorization policies and roles
+- [x] **Auth**: Implement password reset flow — ✅ Phase 2 `PasswordResetService` (silent for unknown emails)
+- [x] **Auth**: Implement email verification — ✅ Phase 2 `EmailVerificationService` (single-use)
+- [x] **Auth**: Implement authorization policies and roles — ✅ Phase 2 deny-by-default `RbacBuilder`/`createRbac`
 - [ ] **Auth**: Implement OAuth/OIDC provider integration
 - [ ] **Auth**: Real integration tests (additional providers)
 - [x] **Cache**: Implement Redis adapter (`ioredis`) — ✅ done, 17 real integration tests
 - [x] **Cache**: Implement namespaces, atomic operations, bulk operations (`keyPrefix`, `increment`, `getMany`, `setMany`) — ✅ done
 - [x] **Session**: Implement Redis-backed store — ✅ `RedisSessionStore` with atomic Lua scripts, 20 real integration tests
 - [x] **Session**: Real integration tests — ✅ done
-- [ ] **Session**: Implement database-backed store
-- [ ] **Session**: Implement cookie transport adapter
-- [ ] **Session**: Implement CSRF protection integration
+- [x] **Session**: Implement database-backed store — ✅ Phase 3 `DatabaseSessionStore` (real SQLite/PG/MySQL tests)
+- [x] **Session**: Implement cookie transport adapter — ✅ Phase 3 `SessionCookieTransport` with `__Host-` secure defaults
+- [x] **Session**: Implement CSRF protection integration — ✅ Phase 3 `CsrfProtection` (double-submit + optional HMAC binding)
 - [ ] **Validation**: Add SvelteKit request validation integration
 - [ ] **Validation**: Add common validators (email, URL, UUID, etc.)
 - [x] **Build reference application demonstrating all Stage 3 packages together** — ✅ `examples/reference-app/`, 18 integration tests (in-process + live Redis), Stage 3 exit criterion met
@@ -173,10 +173,10 @@
 ## Known limitations
 
 1. Database: cross-process migration locking and connection retry/failover are not implemented. PostgreSQL/MySQL adapters, migrations, and pooling ship with real integration tests; built-in ORM integrations (Drizzle/Kysely) and BYO ORM support were delivered in Phase 1 (built-in Prisma/MikroORM/TypeORM remain BYO-only).
-2. Auth: MFA, password reset, email verification, OAuth/OIDC, authorization policy, and cookie security not yet implemented (Argon2id hashing is done).
+2. Auth: password reset, email verification, RBAC, limiter and purpose-scoped tokens delivered in Phase 2. MFA and OAuth2/OIDC remain explicitly out of scope for this completion plan; cookie security is delivered by the session package's Phase 3.
 3. Cache: Redis adapter is done; tags and advanced invalidation are deferred.
-4. Session: Redis shared store is done (atomic Lua scripts); database-backed store, cookie transport, and CSRF integration are still pending.
-5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations, pooling, and ORM integrations (Drizzle/Kysely + BYO) are now delivered; remaining Stage 3 gaps are session cookie transport/CSRF and package-level auth policies.
+4. Session: Redis shared store (atomic Lua), SQL `DatabaseSessionStore`, `__Host-` cookie transport, CSRF, per-user revocation and an auth bridge are all delivered in Phase 3. Remaining: SvelteKit `handle` wiring (Phase 10), cookie signing/encryption, O(1) Redis revocation.
+5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations, pooling, and ORM integrations (Drizzle/Kysely + BYO) are now delivered; the former session cookie transport/CSRF and package-level auth policy gaps are closed by Phases 2–3.
 6. Stage 4 adapters are explicitly process-local: `InProcessTransport` is not distributed, `InMemoryJobQueue` is not durable, `LocalStorageDriver` is local disk only, `TestTransport` never sends real mail, and `@sveltex/testing` fakes are in-memory only. Each README documents this; no untested provider is claimed.
 7. CI pipeline minimal — no OS/Node matrix, no pack verification.
 8. Stage 5 CLI: no consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages (workspace packages are unpublished). Generated manifests/config/hooks and template rendering are verified; the registry round-trip is CI work.
@@ -190,7 +190,7 @@
 
 1. **CI / release:** Node/OS version matrix, fixture build job, `npm pack` + clean consumer install, coverage reporting, and publishing the workspace packages to a registry. Partially delivered in Session 7: CI now uses `--frozen-lockfile`, provisions PostgreSQL/MySQL/Redis services, and runs `pnpm check` + `pnpm test:security`; the matrix, coverage, pack verification and publish remain open.
 2. **Consumer-side verification (blocked on publish):** install → typecheck → build a CLI-generated app against published `@sveltex/*` packages. This is the one Stage 5 exit criterion not yet claimed.
-3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, session cookie transport + CSRF, package-level auth policies, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is now the active roadmap; its Phase 0 audit and Phase 1 database work are delivered (see Session 8).
+3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, SvelteKit `handle` wiring for the Phase 3 session primitives, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is now the active roadmap; its Phase 0 audit and Phase 1 database work are delivered (see Session 8).
 
 Discipline reminder carried from the specification: ecosystem first, CLI last; no fake providers; no claiming untested support; never skip tests to force CI green.
 
@@ -272,3 +272,63 @@ not advertised. A production `TokenStore` (Redis/DB-backed) is left to the consu
 is for dev/test only. CSRF, cookie transport, and account-lockout policies remain optional hardening.
 
 **Next:** commit + push Phase 2, then proceed to Phase 3 (sessions) per the plan.
+
+---
+
+## Session 10 — Completion Plan: Phase 3 — `@sveltex/session` (2026-11-11)
+
+Per the [Existing Package Completion Plan](../completion-plan.md) Phase 3, extended only
+`@sveltex/session` — **no new package was created**. Core rule honoured: every added capability
+has a real implementation and a real test; nothing is advertised that is not shipped.
+
+- **XERJ:** restarted the local node and ran `xerj autoindex --fresh` (407 files / 2114 records /
+  0 junk / `xerj-done ok=true`), then used `xerj search` to study the session cookie/CSRF
+  contract and locate stale "transport deferred" wording across the docs before syncing.
+- **Real services started and verified:** Redis 7 (`PONG`), PostgreSQL 16 (`pg_isready`),
+  MySQL 8.0 (`mysqladmin ping`). All were exercised end-to-end; PostgreSQL/MySQL suites skip
+  cleanly only when unreachable — nothing faked, no test skipped to force green.
+- **Delivered** (`packages/session/src`):
+  - `cookie.ts` — `resolveSessionCookieOptions` (frozen `__Host-` defaults, injection rejection),
+    `serializeSetCookie`, `parseCookieHeader` (null-prototype, `__proto__` blocked),
+    `SessionCookieTransport` / `CookieJar` (SvelteKit-shaped), `SessionCookieError`.
+  - `csrf.ts` — `CsrfProtection` (double-submit, constant-time SHA-256 + `timingSafeEqual`,
+    optional HMAC session binding), `serializeCsrfCookie`, stable `CsrfError` codes.
+  - `database.ts` — `DatabaseSessionStore` over a structural `SessionSqlExecutor`;
+    `sqlite`/`postgres`/`mysql` dialects (`?` / `$1..$n` / `FROM DUAL`); conditional `INSERT`,
+    revision CAS `UPDATE`, transactional `rotate`, `revokeAllForUser`, `purgeExpired`.
+  - `auth.ts` — `createAuthSessionPort`, `supportsRevocation`, `revokeAllForUser`.
+  - `index.ts` — `RevocableSessionStore`, `SessionRevocationUnsupportedError`,
+    `MemorySessionStore.revokeAllForUser`, `SessionManager.revokeAllForUser`.
+  - `redis.ts` — `RedisSessionStore.revokeAllForUser` (namespace `SCAN`, documented O(N)).
+  - Added subpath exports `/cookie`, `/csrf`, `/database`, `/auth` and devDeps on the real
+    `@sveltex/auth` / `@sveltex/database` packages for integration tests.
+- **Tests:** `cookie.test.mjs` (18), `csrf.test.mjs` (16), `database.test.mjs` (17),
+  `auth.test.mjs` (8), `security/phase3-security.test.mjs` (12), `types/phase3.test.ts`.
+  Real integration: SQLite (`node:sqlite`) full lifecycle + 8-way concurrent create (1 winner);
+  PostgreSQL 16 and MySQL 8.0 full lifecycle; Redis 7 revocation; a real `@sveltex/auth`
+  `AuthService` + `Argon2Hasher` register → login → rotate → revoke → logout flow. The type
+  test proves `Database` satisfies `SessionSqlExecutor` and the bridge satisfies `AuthSessionPort`.
+- **Fixed during implementation:** strict-TS `TS2352` (`as unknown as Data`), `TS2379`
+  (`exactOptionalPropertyTypes` optional fields), `PostgresAdapter` needs `connectionString`
+  (not `uri`), `Argon2Hasher` import from `@sveltex/auth/argon2`, CSRF test fake `Headers.get`
+  case-insensitivity, and an unbound-CSRF test expectation (shape-only verification is documented,
+  not hidden). No test was skipped.
+- **Verification (measured 2026-11-11, all services live):** `@sveltex/session` → **104/104**
+  (91 runtime + 13 security) + type tests; full monorepo `pnpm check` → **637/637** runtime
+  (0 failures, 0 skipped, 16 test projects), `pnpm test:security` → **105/105** (15 packages),
+  `pnpm test:types` → 16/16. `npm pack --dry-run` → 27 files, all four new subpath
+  `.js`/`.d.ts` pairs present, no src/test leakage. Phase 2 → Phase 3: +72 runtime, +12 security.
+- **Docs synced:** `specification.md` (session row, package table, 637/105 totals, Stage-3
+  baseline, new Phase 2/3 baseline section), `roadmap.md`, `docs/manifest.json`, `docs/packages/README.md`,
+  `docs/audit/*` (README, package-status, testing-status, security-findings SEC-035 – SEC-040,
+  repository-audit), `docs/completion/phase-0-audit.md`, `packages/session/README.md` +
+  `CHANGELOG.md`, and the [`Phase 3 report`](../completion/phase-3-session.md).
+- **Lockfile:** `pnpm-lock.yaml` gained only the two `workspace:*` devDependency links for the
+  session package; no unrelated dependency churn.
+
+**Not claimed / still open:** SvelteKit `handle` hook and automatic CSRF/session middleware
+(Phase 10), cookie signing/encryption or stateless sessions, O(1) Redis revocation, HMAC CSRF
+binding without a configured `secret`, and cross-process isolation beyond the database's own
+transaction semantics. All are documented in the Phase 3 report.
+
+**Next:** Phase 4 (`@sveltex/cache`) per the plan. Phases 4–12 remain.

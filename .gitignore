@@ -10,3 +10,7 @@ coverage/
 **/.svelte-kit/
 packages/sveltekit/tests/fixtures/*/build/
 *.tsbuildinfo
+
+# XERJ local search index (repository-research tool artifact, never commit)
+.xerj-data/
+.xerj-memory-*

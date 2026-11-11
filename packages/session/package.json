@@ -20,6 +20,22 @@
     "./redis": {
       "types": "./dist/redis.d.ts",
       "import": "./dist/redis.js"
+    },
+    "./cookie": {
+      "types": "./dist/cookie.d.ts",
+      "import": "./dist/cookie.js"
+    },
+    "./csrf": {
+      "types": "./dist/csrf.d.ts",
+      "import": "./dist/csrf.js"
+    },
+    "./database": {
+      "types": "./dist/database.d.ts",
+      "import": "./dist/database.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
     }
   },
   "scripts": {
@@ -43,6 +59,8 @@
     "ioredis": "^6.0.0"
   },
   "devDependencies": {
+    "@sveltex/auth": "workspace:*",
+    "@sveltex/database": "workspace:*",
     "@types/node": "^26.6.6"
   }
 }

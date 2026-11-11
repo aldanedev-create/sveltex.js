@@ -136,6 +136,12 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
     devDependencies:
+      '@sveltex/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@sveltex/database':
+        specifier: workspace:*
+        version: link:../database
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6

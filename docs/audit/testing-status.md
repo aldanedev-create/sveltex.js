@@ -1,37 +1,42 @@
 # SvelteX Testing Status
 
-**Last updated:** 2026-11-08  
+**Last updated:** 2026-11-11  
 **Verification environment:** Node 22.13.1, pnpm 10.20.0, TypeScript 5.9.3
 
 ---
 
 ## Current test results
 
-| Package | Unit | Security | Type | Stress | Integration | Total | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `@sveltex/core` | 72 | 5 | ✅ | ✅ | ✅ | 77+ | All pass |
-| `@sveltex/shared` | 6 | 1 | ✅ | — | — | 7 | All pass |
-| `@sveltex/config` | 8 | 1 | ✅ | — | — | 9 | All pass |
-| `@sveltex/sveltekit` | 35 | 5 | ✅ | ✅ | ✅ | 40+ | All pass |
-| `@sveltex/database` | 116 | 16 | ✅ | — | ✅ SQLite + real PG/MySQL + real Drizzle/Kysely PG | 132 | All pass |
-| `@sveltex/validation` | 8 | 1 | ✅ | — | — | 9 | All pass |
-| `@sveltex/auth` | 29 | 1 | ✅ | — | ✅ Argon2id | 30 | All pass |
-| `@sveltex/cache` | 24 | 1 | ✅ | — | ✅ Redis | 25 | All pass |
-| `@sveltex/session` | 32 | 1 | ✅ | — | ✅ Redis | 33 | All pass |
-| `@sveltex/example-reference-app` | 18 | — | ✅ | — | ✅ Memory + Redis | 18 | All pass |
-| `@sveltex/realtime` | 17 | 8 | ✅ | — | ✅ In-process transport | 25 | All pass |
-| `@sveltex/jobs` | 17 | 7 | ✅ | — | ✅ In-memory queue | 24 | All pass |
-| `@sveltex/storage` | 15 | 9 | ✅ | — | ✅ Real filesystem I/O | 24 | All pass |
-| `@sveltex/mail` | 17 | 9 | ✅ | — | ✅ Test transport | 26 | All pass |
-| `@sveltex/testing` | 20 | 12 | ✅ | — | ✅ Real core DI | 32 | All pass |
-| `sveltex` (CLI) | 48 | 9 | ✅ | — | ✅ Real fs + recorder runner | 57 | All pass |
-| **Total** | **536** | **86** | **16/16** | **2** | **Partial** | **622+** | **All pass** |
+| Package | `pnpm test` | `test:security` | Type tests | Real integration | Status |
+| --- | ---: | ---: | --- | --- | --- |
+| `@sveltex/core` | 72 | 5 | ✅ | ✅ | All pass |
+| `@sveltex/shared` | 6 | 1 | ✅ | — | All pass |
+| `@sveltex/config` | 8 | 1 | ✅ | — | All pass |
+| `@sveltex/sveltekit` | 35 | 5 | ✅ | ✅ fixture | All pass |
+| `@sveltex/database` | 116 | 16 | ✅ | ✅ SQLite + real PG/MySQL + real Drizzle/Kysely PG | All pass |
+| `@sveltex/validation` | 8 | 1 | ✅ | — | All pass |
+| `@sveltex/auth` | 58 | 8 | ✅ | ✅ Argon2id | All pass |
+| `@sveltex/cache` | 24 | 1 | ✅ | ✅ Redis | All pass |
+| `@sveltex/session` | 104 | 13 | ✅ | ✅ SQLite + real PG/MySQL/Redis + real AuthService | All pass |
+| `@sveltex/example-reference-app` | 18 | — | ✅ | ✅ Memory + Redis | All pass |
+| `@sveltex/realtime` | 25 | 8 | ✅ | ✅ In-process transport | All pass |
+| `@sveltex/jobs` | 24 | 7 | ✅ | ✅ In-memory queue | All pass |
+| `@sveltex/storage` | 24 | 9 | ✅ | ✅ Real filesystem I/O | All pass |
+| `@sveltex/mail` | 26 | 9 | ✅ | ✅ Test transport | All pass |
+| `@sveltex/testing` | 32 | 12 | ✅ | ✅ Real core DI | All pass |
+| `sveltex` (CLI) | 57 | 9 | ✅ | ✅ Real fs + recorder runner | All pass |
+| **Total** | **637** | **105** | **16/16** | — | **All pass** |
+
+`pnpm test` is the per-package script count summed by `pnpm -r test` (the `pnpm check` gate);
+`test:security` is the standalone `pnpm test:security` chain. Both were measured on 2026-11-11
+with live services: **0 failures, 0 skipped**. `npm pack --dry-run` for `@sveltex/session` →
+27 files (four new subpath `.js`/`.d.ts` pairs, no src/test leakage).
 
 ---
 
 ## Test infrastructure
 
-> **Counting note (updated 2026-11-08, Phase 1):** `536` is the measured total of `pnpm -r test` (the `pnpm check` gate): 479 Stage 1–4 + 57 Stage 5 CLI, with the +48 over the database-hardening baseline coming from `@sveltex/database` Phase 1 (68 → 116 runtime tests). Stage 4 packages and the CLI include their `tests/security/*.test.mjs` files inside the package `test` script, so the CLI's 9 security cases are part of that 536; Stage 1–3 packages run security cases only through the separate `test:security` gate. `86` is the measured total of the standalone `pnpm test:security` chain (32 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI; the database package grew 7 → 16 in Phase 1). These are two distinct gates, not an additive total.
+> **Counting note (updated 2026-11-11, Phase 3):** `637` is the measured total of `pnpm -r test` (the `pnpm check` gate): 449 Stage 1–3 + reference app, 131 Stage 4, 57 Stage 5 CLI. `105` is the measured total of the standalone `pnpm test:security` chain (51 Stage 1–3 + 45 Stage 4 + 9 Stage 5 CLI). These are **two distinct gates, not an additive total** — Stage 4 packages, the CLI, and now `@sveltex/session` include their `tests/security/*.test.mjs` files inside the package `test` script, so those security cases are also counted within 637; the separate `test:security` gate re-runs them. Phase 2 added 29 runtime + 7 security (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security (session 32→104 / 1→13). Both gates were re-run on 2026-11-11 with live PostgreSQL 16, MySQL 8.0 and Redis 7: exit 0, 0 failures, 0 skipped, 16 test projects (`test:types`). No carried baseline.
 
 ### Runner
 
@@ -67,7 +72,7 @@ Each package has a dedicated `tests/security/` directory testing:
 - SQL injection (database)
 - Credential exposure (auth)
 - Timing attack mitigation (auth)
-- Session fixation (session)
+- Session fixation, secure cookie defaults, Set-Cookie injection, CSRF forgery/mismatch, `__proto__` cookie pollution, stale-cookie clearing, concurrent CAS conflicts (session)
 - Cache key manipulation (cache)
 - Config tampering (config, core)
 - Request isolation (sveltekit)
@@ -104,6 +109,9 @@ Each package has `tests/types/public-api.test.ts` verifying:
 | Auth password hashing | ✅ `@node-rs/argon2` (Argon2id) | ✅ 13 integration tests pass |
 | Cache distributed | ✅ `ioredis` (Redis 7) | ✅ 17 integration tests pass |
 | Session shared store | ✅ `ioredis` (Redis 7) + Lua atomic scripts | ✅ 20 integration tests pass |
+| Session persistent SQL store | ✅ `node:sqlite`, real PostgreSQL 16, real MySQL 8.0 | ✅ 17 tests incl. full lifecycle, concurrency, `$n`/`?` dialects, `FROM DUAL` |
+| Session cookie transport + CSRF | ✅ `__Host-` cookies, `CsrfProtection`, stale-cookie clearing | ✅ 34 tests + 12 security cases |
+| Session ↔ auth bridge | ✅ real `AuthService` + `Argon2Hasher` | ✅ register → login → rotate → revoke → logout |
 | Stage 3 reference app (in-process) | ✅ `node:sqlite` + `@node-rs/argon2` + Memory stores | ✅ 16 integration tests pass |
 | Stage 3 reference app (distributed) | ✅ live Redis for BOTH session + cache | ✅ 2 integration tests pass (survive app restart; atomic sharing across concurrent instances) |
 | Stage 4 realtime transport | ✅ `InProcessTransport` (real process-local pub/sub) | ✅ 25 tests incl. duplicate-delivery, per-subscriber authorization, frozen payloads |
@@ -118,7 +126,7 @@ Each package has `tests/types/public-api.test.ts` verifying:
 ## Known testing gaps
 
 1. ~~**No PostgreSQL/MySQL integration tests**~~ — resolved: 24 integration tests run against real PostgreSQL 16 and MySQL 8.0 servers (CI provisions both). An ORM integration layer (Drizzle/Kysely + BYO) with real PostgreSQL tests was delivered in Phase 1; a cross-process migration lock, connection retry/failover, and built-in Prisma/MikroORM/TypeORM adapters remain out of scope.
-2. **No session database-backed store** — Redis-backed store is implemented and tested; a SQL-backed store is still pending. Cookie transport and CSRF remain out of scope for the `session` package (reference-app wiring is now delivered as an application-level concern).
+2. ~~**No session database-backed store / cookie transport / CSRF**~~ — **resolved in Phase 3.** `DatabaseSessionStore` ships with real SQLite/PostgreSQL/MySQL tests; `__Host-` cookie transport, double-submit CSRF (optional HMAC binding), stale-cookie clearing, per-user revocation and an auth bridge are all shipped and tested. Remaining: SvelteKit `handle` hook wiring (Phase 10), cookie signing/encryption, O(1) Redis revocation.
 3. ~~**No reference application tests**~~ — Resolved: 18 integration tests (in-process + live Redis) cover the full assembly. The Redis suite self-skips when no server is reachable; it never substitutes a fake.
 4. **No `npm pack` + clean installation tests in CI** — Local verification done, CI not configured.
 5. **No cross-platform CI** — Current CI runs `pnpm check` only, no OS matrix.

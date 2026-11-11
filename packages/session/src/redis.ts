@@ -170,6 +170,33 @@ export class RedisSessionStore<Data extends Record<string, unknown> = Record<str
     } while (cursor !== '0');
   }
 
+  /**
+   * Revoke every session belonging to a user (logout-all-devices). Because the Redis
+   * store keeps no secondary user index, this performs a namespace-scoped `SCAN` and
+   * inspects each record — correct but O(N) in the number of active sessions. For large
+   * deployments, maintain a per-user set at write time instead. Requires a `keyPrefix`.
+   */
+  async revokeAllForUser(userId: string): Promise<number> {
+    if (typeof userId !== 'string' || userId.length === 0 || userId.length > 255) throw new TypeError('A valid userId is required.');
+    if (!this.#keyPrefix) {
+      throw new TypeError('revokeAllForUser() requires a keyPrefix to avoid scanning unrelated keys on a shared instance.');
+    }
+    let removed = 0;
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.#redis.scan(cursor, 'MATCH', `${this.#keyPrefix}*`, 'COUNT', 100);
+      cursor = nextCursor;
+      for (const key of keys) {
+        const raw = await this.#redis.get(key);
+        if (raw === null) continue;
+        const record = this.#parse(raw, key.slice(this.#keyPrefix.length));
+        if (!record) continue;
+        if ((record.data as Record<string, unknown>)['userId'] === userId) removed += Number(await this.#redis.del(key));
+      }
+    } while (cursor !== '0');
+    return removed;
+  }
+
   async #run(script: string, keyCount: number, ...args: string[]): Promise<number> {
     const result: unknown = await this.#redis.eval(script, keyCount, ...args);
     return Number(result);

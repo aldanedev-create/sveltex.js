@@ -14,6 +14,23 @@ export interface SessionStore<Data extends Record<string, unknown> = Record<stri
 export interface SessionManagerOptions { readonly ttlMs?: number; readonly now?: () => number; readonly createId?: () => string; readonly maxCreateAttempts?: number; }
 export interface SessionHandle<Data extends Record<string, unknown>> extends SessionRecord<Data> {}
 
+/**
+ * Optional store capability: revoke every session belonging to a user at once
+ * (logout-all-devices, password reset, account compromise). Returns the number removed.
+ * Memory, Redis and the SQL database stores all implement it.
+ */
+export interface RevocableSessionStore<Data extends Record<string, unknown> = Record<string, unknown>> extends SessionStore<Data> {
+  revokeAllForUser(userId: string): Promise<number>;
+}
+
+export class SessionRevocationUnsupportedError extends Error {
+  readonly code = 'SESSION_REVOCATION_UNSUPPORTED';
+  constructor(message = 'The configured session store does not support per-user revocation.') {
+    super(message);
+    this.name = 'SessionRevocationUnsupportedError';
+  }
+}
+
 /** In-memory store for tests and single-process development. Use a transactional shared store in production. */
 export class MemorySessionStore<Data extends Record<string, unknown> = Record<string, unknown>> implements SessionStore<Data> {
   readonly #records = new Map<string, SessionRecord<Data>>();
@@ -25,6 +42,14 @@ export class MemorySessionStore<Data extends Record<string, unknown> = Record<st
     const current = this.#records.get(oldId);
     if (!current || current.revision !== expectedRevision || this.#records.has(record.id)) return false;
     this.#records.set(record.id, cloneRecord(record)); this.#records.delete(oldId); return true;
+  }
+  async revokeAllForUser(userId: string): Promise<number> {
+    if (typeof userId !== 'string' || userId.length === 0 || userId.length > 255) throw new TypeError('A valid userId is required.');
+    let removed = 0;
+    for (const [id, record] of this.#records) {
+      if ((record.data as Record<string, unknown>)['userId'] === userId) { this.#records.delete(id); removed += 1; }
+    }
+    return removed;
   }
   async size(): Promise<number> { return this.#records.size; }
 }
@@ -75,6 +100,11 @@ export class SessionManager<Data extends Record<string, unknown> = Record<string
     throw new Error('Unable to rotate the session identifier without a collision.');
   }
   async destroy(id: string): Promise<void> { validateId(id); await this.#store.delete(id); }
+  /** Revoke every session for a user. Throws when the store has no revocation capability. */
+  async revokeAllForUser(userId: string): Promise<number> {
+    if (!isRevocable(this.#store)) throw new SessionRevocationUnsupportedError();
+    return this.#store.revokeAllForUser(userId);
+  }
   async touch(id: string): Promise<SessionHandle<Data> | undefined> {
     const current = await this.get(id); if (!current) return undefined;
     const now = this.#timestamp(); const record = makeRecord(id, current.data, current.createdAt, now + this.#ttlMs, current.revision + 1);
@@ -89,6 +119,7 @@ function secureId(): string {
   return globalThis.crypto.randomUUID();
 }
 function validateId(id: string): void { if (typeof id !== 'string' || id.length < 16 || id.length > 256 || !/^[A-Za-z0-9_-]+$/.test(id)) throw new TypeError('Session identifiers must be 16–256 URL-safe characters.'); }
+function isRevocable<Data extends Record<string, unknown>>(store: SessionStore<Data>): store is RevocableSessionStore<Data> { return typeof (store as Partial<RevocableSessionStore<Data>>).revokeAllForUser === 'function'; }
 function freezeData<T extends Record<string, unknown>>(data: T): Readonly<T> { if (!data || typeof data !== 'object' || Array.isArray(data)) throw new TypeError('Session data must be a plain object.'); return deepFreeze(cloneData(data)); }
 function makeRecord<T extends Record<string, unknown>>(id: string, data: Readonly<T>, createdAt: number, expiresAt: number, revision: number): SessionRecord<T> { if (!Number.isFinite(expiresAt) || expiresAt <= createdAt) throw new RangeError('Session expiration must be finite and later than creation.'); if (!Number.isSafeInteger(revision) || revision < 1) throw new RangeError('Session revision must be a positive safe integer.'); return Object.freeze({ id, data, createdAt, expiresAt, revision }); }
 function cloneRecord<T extends Record<string, unknown>>(record: SessionRecord<T>): SessionRecord<T> { return makeRecord(record.id, freezeData(record.data as T), record.createdAt, record.expiresAt, record.revision); }
