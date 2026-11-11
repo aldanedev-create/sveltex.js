@@ -20,8 +20,8 @@ added). Runtime tests are counted from real `pnpm -r test`, `pnpm check` = **488
 `pnpm test:security` = **77/77**, type-test projects = **16/16**. These are the **Phase 0
 snapshot** (a historical baseline retained for audit traceability); after Phase 1 the measured
 totals were **536/536 runtime / 86/86 security**, after Phase 2 **565/565 / 93/93**, and after
-Phase 3 **637/637 runtime / 105/105 security**, and after Phase 4 (current)
-**734/734 runtime / 119/119 security** — see the [Phase 4 report](./phase-4-cache.md).
+Phase 3 **637/637 runtime / 105/105 security**, after Phase 4 **734/734 runtime / 119/119 security**, and after Phase 5 (current)
+**779/779 runtime / 131/131 security** — see the [Phase 5 report](./phase-5-realtime.md).
 
 | Package | src files | src lines | runtime tests | subpath exports | engines |
 |---|---:|---:|---:|---|---|
@@ -154,11 +154,22 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 > SEC-041 – SEC-046, and six new subpath exports. No new package was created. Runtime 24 → 121,
 > security 1 → 15; monorepo 637 → 734 runtime / 105 → 119 security.
 
-### Phase 5 — `@sveltex/realtime`
+### Phase 5 — `@sveltex/realtime` (completed 2026-11-11)
 | Requirement | State | Reality |
 |---|:---:|---|
-| Typed channels, authorization, retries, shutdown | ✅ | `InProcessTransport` |
-| **WebSocket transport, SSE transport, heartbeats, reconnection, backpressure** | ✗ | `InProcessTransport` is process-local only (documented) |
+| Typed channels, authorization, retries, shutdown | ✅ | `InProcessTransport` (unchanged, 17 pre-existing tests) |
+| **WebSocket transport** | ✅ | Real `ws` gateway (`createWebSocketGateway` / `attachWebSocketGateway`) + `WebSocketClientTransport`; versioned handshake, sub/unsub/pub/pong frames, real ephemeral TCP ports |
+| **SSE transport** | ✅ | Real `node:http` gateway (`createSseGateway`) + `SseClientTransport` over `fetch` streams; `/events`, `/subscribe`, `/unsubscribe`, `/publish`, `text/event-stream`, keepalive comments |
+| **Heartbeats** | ✅ | `HeartbeatMonitor` (injectable clock/scheduler) + gateway ping/timeout termination on both transports |
+| **Reconnection** | ✅ | Capped exponential backoff with jitter, re-subscribe and queued-publish drain; SSE `Last-Event-ID` replay (channel-filtered) |
+| **Backpressure** | ✅ | `BoundedQueue` with three explicit overflow policies; `bufferedAmount` (WS) and `write()` return value + bounded pending frames (SSE) |
+| **Message validation / auth** | ✅ | Strict versioned wire protocol (direction, byte bounds, envelope, no silent JSON coercion); deny-by-default gateway `authenticate` |
+| Real integration, no fakes | ✅ | Real `ws` sockets + real `node:http` servers on ephemeral ports; genuinely unreachable port for reconnect/backpressure; 70 tests (50 runtime + 20 security) |
+
+> **Phase 5 outcome (2026-11-11):** see the [Phase 5 report](./phase-5-realtime.md). All former
+> gaps are closed with real implementations, real tests, security findings SEC-047 – SEC-052,
+> and four new subpath exports. No new package was created. Runtime 25 → 70,
+> security 8 → 20; monorepo 734 → 779 runtime / 119 → 131 security.
 
 ### Phase 6 — `@sveltex/jobs`
 | Requirement | State | Reality |
@@ -246,19 +257,19 @@ real template capability demos), not as a from-scratch build.
 | Criterion | Now |
 |---|:---:|
 | All packages audited | ✅ this document |
-| Required functionality implemented | ◐ (Phases 0–4 done; 5–12 pending) |
+| Required functionality implemented | ◐ (Phases 0–5 done; 6–12 pending) |
 | Database supports built-in ORM integrations + custom adapters | ✅ Phase 1 done (Drizzle/Kysely + BYO) |
 | Public APIs / TypeScript types stable | ✅ (current surface) |
-| Unit/integration/security/type tests pass | ✅ 734 / 119 / 16 (Phase 4) |
+| Unit/integration/security/type tests pass | ✅ 779 / 131 / 16 (Phase 5) |
 | Packages build and install independently | ◐ (frozen install works; clean consumer install not verified) |
 | Cross-package scenarios work | ✗ (2 of 13) |
-| Documentation matches implementation | ✅ (Phase 4 doc sync complete) |
+| Documentation matches implementation | ✅ (Phase 5 doc sync complete) |
 | Generated apps build and run | ◐ (in-monorepo only) |
 | Production-readiness checks pass | ✗ |
 
 **Bottom line:** the repository is clean, honest, and fully tested for what it currently
-promises. Completion-plan Phases 0–4 (audit, database ORM integrations, auth, sessions, cache) are
-delivered with real implementations, real integration tests and synced documentation; the
-measured gate is 734/734 runtime, 119/119 security, 16/16 type-test projects. Phases 5–12
-(realtime, jobs, storage, mail, validation/testing, cross-package integration,
-production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 5.
+promises. Completion-plan Phases 0–5 (audit, database ORM integrations, auth, sessions, cache,
+realtime) are delivered with real implementations, real integration tests and synced documentation;
+the measured gate is 779/779 runtime, 131/131 security, 16/16 type-test projects. Phases 6–12
+(jobs, storage, mail, validation/testing, cross-package integration,
+production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 6.

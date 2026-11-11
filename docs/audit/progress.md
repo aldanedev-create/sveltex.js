@@ -122,7 +122,7 @@
 
 ### Stage 4 — Advanced capabilities (complete)
 
-- [x] `@sveltex/realtime` — typed channels, required authorization hook, per-subscriber de-duplication, `InProcessTransport` (25 tests). WebSocket/SSE adapters remain an optional, unshipped integration point.
+- [x] `@sveltex/realtime` — typed channels, required authorization hook, per-subscriber de-duplication, `InProcessTransport` (25 tests at that time). WebSocket/SSE adapters were delivered later in completion-plan Phase 5 (Session 12), bringing the package to 70 tests.
 - [x] `@sveltex/jobs` — `JobQueue` contract, `InMemoryJobQueue` (atomic claim, delayed visibility, dedupe, dead-letter), `Worker` (concurrency, retries, capped backoff, graceful shutdown) (24 tests). Durable/distributed broker adapters remain unshipped.
 - [x] `@sveltex/storage` — `StorageDriver` contract, `LocalStorageDriver` (real fs I/O, hashed keys, atomic writes, streaming, symlink rejection) (24 tests). S3/object-store adapters remain unshipped.
 - [x] `@sveltex/mail` — message/template contracts, retrying `Mailer`, header-injection rejection, `TestTransport` (26 tests). SMTP/HTTP provider adapters remain unshipped.
@@ -175,9 +175,10 @@
 1. Database: cross-process migration locking and connection retry/failover are not implemented. PostgreSQL/MySQL adapters, migrations, and pooling ship with real integration tests; built-in ORM integrations (Drizzle/Kysely) and BYO ORM support were delivered in Phase 1 (built-in Prisma/MikroORM/TypeORM remain BYO-only).
 2. Auth: password reset, email verification, RBAC, limiter and purpose-scoped tokens delivered in Phase 2. MFA and OAuth2/OIDC remain explicitly out of scope for this completion plan; cookie security is delivered by the session package's Phase 3.
 3. Cache: Redis adapter, strict serialization envelopes, escaped namespaces, tag/prefix/predicate invalidation, graceful fallback and process-local single-flight are delivered in Phase 4. A distributed lock (single-flight is process-local only) and non-Redis distributed backends are not shipped.
+4. Realtime: real WebSocket (`ws`) and SSE (`node:http` + `fetch`) gateways and client transports, a strict versioned wire protocol, deny-by-default authentication, heartbeats, reconnect/resubscribe, backpressure and channel-filtered replay are delivered in Phase 5. A cross-instance broker, persistence, TLS termination and distributed lock are not shipped.
 4. Session: Redis shared store (atomic Lua), SQL `DatabaseSessionStore`, `__Host-` cookie transport, CSRF, per-user revocation and an auth bridge are all delivered in Phase 3. Remaining: SvelteKit `handle` wiring (Phase 10), cookie signing/encryption, O(1) Redis revocation.
 5. ~~No reference application~~ — resolved: `examples/reference-app/` meets the Stage 3 exit criterion (18 integration tests, memory + live Redis paths). Provider coverage (PostgreSQL/MySQL), migrations, pooling, and ORM integrations (Drizzle/Kysely + BYO) are now delivered; the former session cookie transport/CSRF and package-level auth policy gaps are closed by Phases 2–3.
-6. Stage 4 adapters are explicitly process-local: `InProcessTransport` is not distributed, `InMemoryJobQueue` is not durable, `LocalStorageDriver` is local disk only, `TestTransport` never sends real mail, and `@sveltex/testing` fakes are in-memory only. Each README documents this; no untested provider is claimed.
+6. Stage 4 adapters remain process-local or single-process: `InProcessTransport` is not distributed, `InMemoryJobQueue` is not durable, `LocalStorageDriver` is local disk only, `TestTransport` never sends real mail, and `@sveltex/testing` fakes are in-memory only; the Phase 5 `@sveltex/realtime` WebSocket/SSE gateways are real network transports but single-process fan-out hubs, not a cross-instance broker. Each README documents this; no untested provider is claimed.
 7. CI pipeline minimal — no OS/Node matrix, no pack verification.
 8. Stage 5 CLI: no consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages (workspace packages are unpublished). Generated manifests/config/hooks and template rendering are verified; the registry round-trip is CI work.
 9. Stage 5 CLI ships no external provider adapters and performs no registry lookup; `upgrade` reports CLI-owned metadata only.
@@ -190,7 +191,7 @@
 
 1. **CI / release:** Node/OS version matrix, fixture build job, `npm pack` + clean consumer install, coverage reporting, and publishing the workspace packages to a registry. Partially delivered in Session 7: CI now uses `--frozen-lockfile`, provisions PostgreSQL/MySQL/Redis services, and runs `pnpm check` + `pnpm test:security`; the matrix, coverage, pack verification and publish remain open.
 2. **Consumer-side verification (blocked on publish):** install → typecheck → build a CLI-generated app against published `@sveltex/*` packages. This is the one Stage 5 exit criterion not yet claimed.
-3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, SvelteKit `handle` wiring for the Phase 3 session primitives, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is the active roadmap; its Phases 0–4 are delivered (see Sessions 8–11) and Phase 5 (`@sveltex/realtime`) is next.
+3. **Remaining hardening (optional, non-blocking):** cross-process migration locking, SvelteKit `handle` wiring for the Phase 3 session primitives, built-in Prisma/MikroORM/TypeORM adapters; WebSocket/SSE, durable job broker, S3, and SMTP/HTTP adapters for Stage 4. Any such adapter must ship with real integration tests before being advertised. The [Existing Package Completion Plan](../completion-plan.md) is the active roadmap; its Phases 0–4 are delivered (see Sessions 8–11) and Phase 5 (`@sveltex/realtime`) is next. *(Historical status at the time of writing — Phase 5 has since been delivered in Session 12, including real WebSocket/SSE gateways; a durable job broker, S3 and SMTP/HTTP adapters remain unshipped; Phases 6–12 remain.)*
 
 Discipline reminder carried from the specification: ecosystem first, CLI last; no fake providers; no claiming untested support; never skip tests to force CI green.
 
@@ -398,5 +399,62 @@ only de-synchronizes expiry), non-Redis distributed backends, SvelteKit `handle`
 (Phase 10), and a package version bump (Phase 11). Fallback reads may be stale while degraded —
 documented in the README, not hidden. All are recorded in the Phase 4 report.
 
-**Next:** Phase 5 (`@sveltex/realtime`) per the plan. Phases 5–12 remain.
+**Next:** Phase 5 (`@sveltex/realtime`) per the plan — delivered in Session 12 below.
+
+---
+
+## Session 12 — Completion Plan: Phase 5 — `@sveltex/realtime` (2026-11-11)
+
+Per the [Existing Package Completion Plan](../completion-plan.md) Phase 5, extended **only**
+`@sveltex/realtime` — no new package was created. Full report:
+[`Phase 5 report`](../completion/phase-5-realtime.md).
+
+- **XERJ first.** The local XERJ node (`http://127.0.0.1:9200`) was verified live and queried for
+  the Phase 5 task list and the Phase 0 gap table (typed channels ✅; WebSocket/SSE/heartbeats/
+  reconnection/backpressure ✗). A stale-index warning for `pnpm-lock.yaml` was resolved with a
+  final `--fresh` rebuild after the docs sync: **440 files / 2444 records live / 31 duplicate
+  aliases / 0 junk records / 0 junk/skipped files**, `ax-docs` 2429 docs, `ax-packages-cli`
+  15 docs, graph 1565 edges, `xerj-done ok=true exit=0 reason=completed`.
+- **Delivered (4 new source modules + 2 rewrites):** `protocol.ts` (versioned `ready`, direction
+  enforcement, 64 KiB bounds, strict envelope validation, `assertSerializable` walk,
+  `publicWireError`); `connection.ts` (`computeReconnectDelay`, `BoundedQueue`, `HeartbeatMonitor`
+  with injectable clock/scheduler); `websocket.ts` (`createWebSocketGateway`,
+  `attachWebSocketGateway`, `WebSocketClientTransport` over real `ws`); `sse.ts`
+  (`createSseGateway` over `node:http`, `SseClientTransport` over real `fetch` streams). `index.ts`
+  gained `RealtimeProtocolError` / `RealtimeBackpressureError` / `RealtimeConnectionError` and the
+  exported shared channel grammar.
+- **Real network behavior, no fakes.** Deny-by-default gateway auth (`denyAnonymous()` /
+  `allowAnonymous()`), versioned handshake, `sub`/`unsub`/`pub`/`pong` client frames,
+  `ready`/`msg`/`ping`/`error` server frames, `bufferedAmount` and `write()` backpressure,
+  heartbeat timeout termination, capped reconnect with re-subscribe and queue drain, `text/event-stream`
+  with keepalive comments and channel-filtered `Last-Event-ID` replay. `ws@^8.22.2` is the single
+  new runtime dependency; SSE needs no extra package.
+- **Public surface & version policy.** Four subpath exports (`/protocol`, `/connection`,
+  `/websocket`, `/sse`) with matching `.js`/`.d.ts` pairs. The package version stays `0.1.0` with
+  the rest of the workspace — the CLI integration registry enforces a single workspace version;
+  the bump is deferred to the Phase 11 release audit (documented in `CHANGELOG.md`).
+- **Fixed during implementation:** a failing protocol test exposed that `Array.prototype` was
+  rejected by `assertSerializable` (arrays now allowed); outbound `sub`/`unsub` frames now validate
+  channel grammar at the encoder boundary. Strict TypeScript fixes included an unused SSE byte-limit
+  field (wired as a real outbound frame check), `export =` `@types/ws` ESM imports, readonly
+  `SseConnection.channels` updates via shared sets, and `httpServer.closeAllConnections?.()`.
+- **Verification (measured 2026-11-11, live PostgreSQL 16 / MySQL 8.0 / Redis 7):**
+  `@sveltex/realtime` → **70/70** (50 runtime + 20 security) plus a public-API subpath type test;
+  full monorepo `pnpm check` → **779/779** runtime (0 failures, 0 skipped, 16 test projects),
+  `pnpm test:security` → **131/131** (15 packages), `pnpm test:types` → **16/16**.
+  `npm pack --dry-run --json` → **27 files**, 6 `dist/*.js` + 6 `dist/*.d.ts`, version `0.1.0`,
+  no `src`/`tests` leakage. Phase 4 → Phase 5: **+45 runtime, +12 security**. No test skipped.
+- **Docs synced:** `README.md`, `docs/roadmap.md`, `docs/specification.md` (realtime row, Stage 4
+  tables/baselines, totals, Phase 5 verification section), `docs/packages/README.md`,
+  `docs/manifest.json` (40 documents), `docs/completion-plan.md` (all 21 Phase 5 checkboxes),
+  `docs/completion/phase-0-audit.md` (Phase 5 table + criteria), `docs/audit/*` (README,
+  package-status, testing-status, repository-audit, security-findings SEC-047 – SEC-052, progress),
+  `packages/realtime/README.md` + `CHANGELOG.md`, and the new [`Phase 5 report`](../completion/phase-5-realtime.md).
+
+**Not claimed / still open:** a cross-instance broker, persistence, TLS termination, gateway rate
+limiting and a distributed lock (gateways are single-process fan-out hubs); SSE replay is bounded
+and channel-filtered, not durable history. SvelteKit `handle` wiring (Phase 10) and a package
+version bump (Phase 11) remain. All are recorded in the Phase 5 report.
+
+**Next:** Phase 6 (`@sveltex/jobs`) per the plan. Phases 6–12 remain.
 

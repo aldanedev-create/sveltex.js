@@ -20,6 +20,22 @@
     "./in-process": {
       "types": "./dist/in-process.d.ts",
       "import": "./dist/in-process.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./connection": {
+      "types": "./dist/connection.d.ts",
+      "import": "./dist/connection.js"
+    },
+    "./websocket": {
+      "types": "./dist/websocket.d.ts",
+      "import": "./dist/websocket.js"
+    },
+    "./sse": {
+      "types": "./dist/sse.d.ts",
+      "import": "./dist/sse.js"
     }
   },
   "scripts": {
@@ -46,9 +62,11 @@
     "websocket"
   ],
   "dependencies": {
-    "@sveltex/shared": "workspace:*"
+    "@sveltex/shared": "workspace:*",
+    "ws": "^8.22.2"
   },
   "devDependencies": {
-    "@types/node": "^26.6.6"
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2"
   }
 }

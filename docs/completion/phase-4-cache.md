@@ -1,6 +1,6 @@
 # Phase 4 — Cache completion report
 
-**Status:** implemented, tested against real Redis 7, documented. Phase 4 done; Phases 5–12 remain.
+**Status:** implemented, tested against real Redis 7, documented. Phase 4 done; Phases 5–12 remain (historical status at the time of writing — Phase 5 has since been delivered; see the [Phase 5 report](./phase-5-realtime.md)).
 **Date:** 2026-11-11
 **Core rule honoured:** *Finish what SvelteX already promises before making SvelteX promise more.*
 No new package was created — only `@sveltex/cache` was extended.
@@ -174,5 +174,5 @@ totals, Stage-3 detail, Phase 2–4 baseline + Phase 4 verification section);
 
 ## Next
 
-Phase 5 — `@sveltex/realtime` completion (WebSocket / SSE transports), per the plan.
+Phase 5 — `@sveltex/realtime` completion (WebSocket / SSE transports), per the plan — delivered; see the [Phase 5 report](./phase-5-realtime.md).
 Phases 5–12 remain.

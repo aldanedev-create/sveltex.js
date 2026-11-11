@@ -19,14 +19,14 @@
 | `@sveltex/cache` | ✅ Pass | ✅ Pass | ✅ 121/121 | ✅ 15/15 | ✅ Pass | **Stage 3 — Complete (Phase 4: envelope/namespaces/tags/fallback/single-flight)** |
 | `@sveltex/session` | ✅ Pass | ✅ Pass | ✅ 104/104 | ✅ 13/13 | ✅ Pass | **Stage 3 — Complete (cookies + CSRF + SQL store + revocation + auth bridge)** |
 | `@sveltex/example-reference-app` | ✅ Pass | ✅ Pass | ✅ 18/18 | N/A | ✅ Pass | **Stage 3 — Exit criterion met** |
-| `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 25/25 | ✅ 8/8 | ✅ Pass | **Stage 4 — Ready (process-local)** |
+| `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 70/70 | ✅ 20/20 | ✅ Pass | **Stage 4 — Complete (Phase 5: real WS/SSE gateways, strict protocol, connection lifecycle)** |
 | `@sveltex/jobs` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 7/7 | ✅ Pass | **Stage 4 — Ready (process-local)** |
 | `@sveltex/storage` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (local disk)** |
 | `@sveltex/mail` | ✅ Pass | ✅ Pass | ✅ 26/26 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (test transport)** |
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **734/734** | **119/119** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **779/779** | **131/131** | **16/16** | **All pass** |
 
 ---
 
@@ -143,13 +143,13 @@
 
 All five packages are independently installable ESM packages with strict `tsconfig.json`, `README.md`, `CHANGELOG.md`, runtime tests, `tests/security/`, and `tests/types/public-api.test.ts`. XERJ was re-indexed (`1159 records / 261 files`) and used to study the Stage 4 spec and the real `@sveltex/core` DI/lifecycle contracts before implementation.
 
-#### `@sveltex/realtime` — ✅ Ready (process-local)
+#### `@sveltex/realtime` — ✅ Complete (Phase 5: real WebSocket / SSE gateways)
 
-- **Source:** `src/index.ts` (contracts, hub, authorization, de-duplication, errors) + `src/in-process.ts`.
-- **Public API:** `defineChannel<T>()`, `RealtimeHub<P>`, `allowAll`/`denyAll`, `InProcessTransport` (`./in-process`), `RealtimeTransport`, `Subscription`, `AuthorizeHook<P>`, `AuthorizationContext<P>`, `RealtimeMetrics`, and the `RealtimeError` family.
-- **Features:** required `authorize` hook (no implicit allow) consulted for `publish`/`subscribe`/`deliver`; `deliver` evaluated **per subscriber**; bounded **per-subscriber** de-duplication of at-least-once redeliveries (an initial global-set design was corrected); deep-frozen delivered payloads; subscriber failure isolation; metrics.
-- **Tests:** 25 — 17 unit + 8 security. `InProcessTransport({ redeliveries })` deterministically simulates duplicate delivery.
-- **Limitations:** process-local only; no WebSocket/SSE or broker adapter is shipped or advertised.
+- **Source:** `src/index.ts` (contracts, hub, authorization, de-duplication, errors, three new typed errors and the shared channel grammar), `src/in-process.ts`, plus Phase 5 modules `protocol.ts`, `connection.ts`, `websocket.ts`, `sse.ts`.
+- **Public API:** `defineChannel<T>()`, `RealtimeHub<P>`, `allowAll`/`denyAll`, `InProcessTransport` (`./in-process`); four new subpath exports `./protocol` (codec + `allowAnonymous`/`denyAnonymous`), `./connection` (`computeReconnectDelay`, `BoundedQueue`, `HeartbeatMonitor`), `./websocket` (`createWebSocketGateway`, `attachWebSocketGateway`, `WebSocketClientTransport`), `./sse` (`createSseGateway`, `SseClientTransport`).
+- **Features:** required `authorize` hook evaluated per subscriber; bounded per-subscriber de-duplication; Phase 5 adds a strict versioned wire protocol (direction enforcement, byte bounds, strict envelopes, no silent JSON coercion, `__proto__` stripping), deny-by-default gateway authentication, real `ws` / `node:http` + `fetch` network transports, heartbeats, capped reconnect with re-subscribe and queue drain, bounded backpressure and channel-filtered SSE `Last-Event-ID` replay.
+- **Tests:** 70 — 50 runtime (17 pre-existing + 33 new) + 20 security (8 pre-existing + 12 new), plus a public-API subpath type test. Real ephemeral TCP ports and real `fetch` streams; no fake transport, no skipped test.
+- **Limitations:** both gateways are single-process fan-out hubs; no persistence, cross-instance fan-out, broker, TLS termination, rate limiting or distributed lock. SSE replay is bounded and channel-filtered, not durable history. See [`Phase 5 report`](../completion/phase-5-realtime.md).
 
 #### `@sveltex/jobs` — ✅ Ready (process-local)
 

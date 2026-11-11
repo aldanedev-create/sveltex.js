@@ -137,7 +137,7 @@ These packages must be independently installable. A developer should not need th
 
 | Package | Responsibility |
 | --- | --- |
-| `@sveltex/realtime` | Typed channels/events, authorization hooks, transport contracts, and optional WebSocket/SSE adapters. |
+| `@sveltex/realtime` | Typed channels/events, authorization hooks, transport contracts, and real WebSocket/SSE gateways with client transports (strict wire protocol, heartbeats, reconnect, backpressure). |
 | `@sveltex/jobs` | Job definitions, queue contracts, retries, backoff, deduplication, concurrency, and worker lifecycle. |
 | `@sveltex/storage` | File/object storage contracts, safe upload metadata, streaming, and provider adapters. |
 | `@sveltex/mail` | Email message contracts, template integration, provider adapters, retries, and test transport. |
@@ -150,11 +150,11 @@ These packages must be independently installable. A developer should not need th
 - Testing helpers can exercise the real packages without requiring live external services. ✅
 - Deployment limitations are documented (for example, in-process workers are not a durable distributed queue). ✅
 
-**Stage 4 exit status (verified 2026-11-07):** all five packages are implemented, independently installable, and covered by runtime, security, and public-API type tests (131 runtime + 45 security tests across Stage 4). Each ships a real process-local implementation behind an explicit adapter contract; no WebSocket/SSE, S3, SMTP/HTTP, or broker provider is shipped or advertised.
+**Stage 4 exit status (verified 2026-11-07; updated after Phase 5):** all five packages are implemented, independently installable, and covered by runtime, security, and public-API type tests (176 runtime + 57 security tests across Stage 4 after Phase 5). Each ships a real implementation behind an explicit adapter contract. Phase 5 added real WebSocket/SSE gateways to `@sveltex/realtime` (single-process fan-out, tested on real ephemeral TCP ports); S3, SMTP/HTTP, and cross-instance broker providers are still not shipped or advertised.
 
 | Package | Delivered | Explicitly not claimed |
 | --- | --- | --- |
-| `@sveltex/realtime` | `defineChannel`, `RealtimeHub` with a **required** `authorize` hook (publish/subscribe/deliver), per-subscriber bounded de-duplication, frozen delivered payloads, `InProcessTransport` with deterministic redelivery simulation | No distributed delivery; no WebSocket/SSE adapter |
+| `@sveltex/realtime` | `defineChannel`, `RealtimeHub` with a **required** `authorize` hook, per-subscriber de-duplication, frozen payloads, `InProcessTransport`; Phase 5 adds real WebSocket/SSE gateways + client transports, strict wire protocol, heartbeats, reconnect, backpressure | No cross-instance broker/persistence; gateways are single-process fan-out |
 | `@sveltex/jobs` | `JobQueue` contract + `InMemoryJobQueue` (atomic claim, delayed visibility, dedupe keys, dead-letter), `Worker` with concurrency, capped exponential backoff, retries, graceful shutdown, injectable clock | No durable/distributed queue; no broker adapter |
 | `@sveltex/storage` | `StorageDriver` contract + `LocalStorageDriver` (real filesystem I/O, SHA-256 hashed filenames, key-traversal rejection, atomic temp+rename writes, metadata sidecars, Web-stream reads, symlink rejection, integrity checks) | No S3/object-store adapter; not a distributed store |
 | `@sveltex/mail` | `MailTransport` contract + `Mailer` with capped exponential-backoff retries, `renderTemplate` with HTML escaping by default, CRLF/NUL header-injection rejection, `TestTransport` (deterministic, never sends real mail) | No SMTP/HTTP provider adapter |
@@ -200,7 +200,7 @@ packages/
 ├── auth/          # ✅ Stage 3 — Contract + Argon2id hasher complete
 ├── cache/         # ✅ Stage 3 — In-memory + Redis adapter complete
 ├── session/       # ✅ Stage 3 — memory + Redis (Lua) + SQL stores, secure cookies, CSRF, revocation
-├── realtime/      # ✅ Stage 4 — typed channels + auth + in-process transport
+├── realtime/      # ✅ Stage 4 — typed channels + auth + in-process transport + Phase 5 WS/SSE gateways, 70 tests
 ├── jobs/          # ✅ Stage 4 — queue + retries/backoff + worker lifecycle
 ├── storage/       # ✅ Stage 4 — storage contract + local filesystem driver
 ├── mail/          # ✅ Stage 4 — message/template contract + retries + test transport
@@ -224,14 +224,14 @@ examples/
 | cache | ✅ | ✅ | 121/121 | ✅ 15/15 | **Complete (Phase 4)** — strict envelope, namespaces, tags, fallback, single-flight; distributed lock not claimed |
 | session | ✅ | ✅ | 104/104 | ✅ 13/13 | **Complete** — secure cookies, CSRF, SQL store (SQLite/PG/MySQL), Redis, revocation, auth bridge |
 | examples/reference-app | ✅ | ✅ | 18/18 | — | **Stage 3 exit criterion met** |
-| realtime | ✅ | ✅ | 25/25 | ✅ 8/8 | **Stage 4 — ready (process-local)** |
+| realtime | ✅ | ✅ | 70/70 | ✅ 20/20 | **Complete (Phase 5)** — real WS/SSE gateways + clients, strict protocol, lifecycle; single-process fan-out |
 | jobs | ✅ | ✅ | 24/24 | ✅ 7/7 | **Stage 4 — ready (process-local)** |
 | storage | ✅ | ✅ | 24/24 | ✅ 9/9 | **Stage 4 — ready (local disk)** |
 | mail | ✅ | ✅ | 26/26 | ✅ 9/9 | **Stage 4 — ready (test transport)** |
 | testing | ✅ | ✅ | 32/32 | ✅ 12/12 | **Stage 4 — ready (real core DI)** |
 | cli (`sveltex`) | ✅ | ✅ | 57/57 | ✅ 9/9 | **Stage 5 — ready (built last)** |
 
-**Total: 734/734 runtime tests passing** (Stage 1–3 + reference app: 546; Stage 4: 131; Stage 5 CLI: 57), **119/119 security tests** (Stage 1–3: 65; Stage 4: 45; Stage 5 CLI: 9), **16/16 type-test projects**. Measured 2026-11-11 with live PostgreSQL 16, MySQL 8.0 and Redis 7 services: full `pnpm check` (exit 0) and `pnpm test:security` (exit 0) re-run after Phase 4 — 0 failures, 0 skipped, no carried baseline. *Phase 2 added 29 runtime + 7 security tests (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security tests (session 32→104 / 1→13); Phase 4 added 97 runtime + 14 security tests (cache 24→121 / 1→15). Every new capability has a real implementation and a real test.*
+**Total: 779/779 runtime tests passing** (Stage 1–3 + reference app: 546; Stage 4: 176; Stage 5 CLI: 57), **131/131 security tests** (Stage 1–3: 65; Stage 4: 57; Stage 5 CLI: 9), **16/16 type-test projects**. Measured 2026-11-11 with live PostgreSQL 16, MySQL 8.0 and Redis 7 services: full `pnpm check` (exit 0), `pnpm test:security` (exit 0) and `pnpm test:types` (exit 0) re-run after Phase 5 — 0 failures, 0 skipped, no carried baseline. *Phase 2 added 29 runtime + 7 security tests (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security tests (session 32→104 / 1→13); Phase 4 added 97 runtime + 14 security tests (cache 24→121 / 1→15); Phase 5 added 45 runtime + 12 security tests (realtime 25→70 / 8→20). Every new capability has a real implementation and a real test.*
 
 Each package must have its own `package.json`, source entry point, README, changelog, TypeScript configuration, and tests. A package directory is not considered implemented merely because it exists. The root workspace should build and test packages in dependency order.
 
@@ -557,19 +557,19 @@ Omitting `redisUrl` runs the in-process pair; supplying it switches **both** ses
 
 **Security properties:** no self-granted roles (registration accepts only `email` / `password` / `displayName`; `admin` comes from trusted `adminEmails`), authorization never trusts a cached role, `createPost` takes `authorId` from the session, all SQL is parameterized, `grantRole` enforces an allow-list and invalidates the profile cache, and `rotateSession` demonstrates atomic ID rotation.
 
-**Verification:** 18 integration tests (16 in-process + 2 live Redis) plus a public-API type test; all pass under `pnpm check`. This section records the Stage 3 baseline; repo-wide totals at the end of Stage 5 were **450/450 runtime tests** (historical baseline; the total after Phase 3 was 637/637 runtime and 105/105 security; the current measured total after Phase 4 is 734/734 runtime and 119/119 security — see the Phase 2–4 baseline below).
+**Verification:** 18 integration tests (16 in-process + 2 live Redis) plus a public-API type test; all pass under `pnpm check`. This section records the Stage 3 baseline; repo-wide totals at the end of Stage 5 were **450/450 runtime tests** (historical baseline; the total after Phase 3 was 637/637 runtime and 105/105 security; the current measured total after Phase 5 is 779/779 runtime and 131/131 security — see the Phase 2–5 baseline below).
 
 ## Stage 4 implementation baseline (added 2026-11-07)
 
 All five Stage 4 packages have substantive, tested implementations. None is a placeholder:
 
-- `@sveltex/realtime`: `defineChannel<T>()`, `RealtimeHub<P>` with a required `AuthorizeHook<P>` (no implicit allow), per-action authorization (`publish` / `subscribe` / `deliver`), per-subscriber bounded de-duplication of at-least-once redeliveries, deep-frozen delivered payloads, subscriber failure isolation, metrics (`published/delivered/duplicates/rejected/failed`), and `InProcessTransport` (process-local pub/sub with deterministic `redeliveries` simulation). 25 tests (17 unit + 8 security). **Not shipped:** WebSocket/SSE or broker adapters.
+- `@sveltex/realtime`: `defineChannel<T>()`, `RealtimeHub<P>` with a required `AuthorizeHook<P>` (no implicit allow), per-action authorization, per-subscriber bounded de-duplication, deep-frozen payloads, subscriber failure isolation, metrics, and `InProcessTransport`. Completion-plan Phase 5 adds real WebSocket (`ws`) and SSE (`node:http` + `fetch`) gateways and client transports, a strict versioned wire protocol, deny-by-default gateway auth, heartbeats, capped reconnect with re-subscribe/queue drain and bounded backpressure. 70 tests (50 runtime + 20 security). **Not shipped:** a cross-instance broker or durable delivery.
 - `@sveltex/jobs`: `JobQueue` contract, `InMemoryJobQueue` (atomic `claim`, delayed visibility via `availableAt`, deduplication keys, dead-letter state, idempotent `complete`/`fail`), `computeBackoffDelay`, and `Worker` (concurrency, capped exponential backoff, bounded retries, failure isolation, graceful `stop()`, external `AbortSignal`, injectable `now` via public `tick(now?)`). 24 tests (17 + 7). **Not shipped:** durable/distributed broker adapters.
 - `@sveltex/storage`: `ObjectBody`/`ObjectMetadata`/`StorageDriver` contracts, `Storage` facade (key/content-type/custom-metadata/size validation before I/O), `LocalStorageDriver` (real filesystem I/O, SHA-256 hashed filenames, atomic temp+`rename` writes with metadata published last, Web `ReadableStream<Uint8Array>` reads, symlink rejection, etag/size integrity metadata). 24 tests (15 + 9). **Not shipped:** S3/object-store adapters.
 - `@sveltex/mail`: `MailMessage`/`MailTransport` contracts, `validateMessage` (address + header-injection checks), `renderTemplate` (HTML escaping by default), `computeRetryDelay`, `Mailer` (bounded capped-backoff retries, injectable `sleep`/`now`, permanent failure → `MailSendError` with attempts and cause), and `TestTransport` (deterministic in-memory, never sends real mail). 26 tests (17 + 9). **Not shipped:** SMTP/HTTP provider adapters.
 - `@sveltex/testing`: `TestApplication`/`createTestApplication`/`withTestApplication`/`createRequestFixture` built on the **real** `@sveltex/core` `createApplication`, `defineModule`, `token`, `Container` — no parallel DI implementation. `FakeClock`, `LifecycleRecorder`, `testToken`, three provider helpers, `defineTestModule`, plus `FakeKeyValueAdapter` and `FakeMessageTransport` in-memory fakes with `failNext()` and frozen snapshots. 32 tests (20 + 12).
 
-All five ship strict TypeScript declarations, READMEs documenting process-local limitations, changelogs, and public-API type tests. `npm pack --dry-run` was verified for each: only `dist/`, `README.md`, `CHANGELOG.md`, and `package.json` are published. Repo-wide totals after Stage 4 were **393/393 runtime tests, 62/62 security tests, 15/15 type-test projects**; after Stage 5 they were **450/450, 71/71, 16/16** (Stage 5 baseline), verified with `pnpm check`. The totals after database hardening were 488/488, 77/77, 16/16; after the completion plan's Phase 1 they were 536/536, 86/86, 16/16; after Phase 2 (565/565, 93/93), Phase 3 (637/637, 105/105, 16/16), and Phase 4 they are 734/734, 119/119, 16/16.
+All five ship strict TypeScript declarations, READMEs documenting process-local limitations, changelogs, and public-API type tests. `npm pack --dry-run` was verified for each: only `dist/`, `README.md`, `CHANGELOG.md`, and `package.json` are published. Repo-wide totals after Stage 4 were **393/393 runtime tests, 62/62 security tests, 15/15 type-test projects**; after Stage 5 they were **450/450, 71/71, 16/16** (Stage 5 baseline), verified with `pnpm check`. The totals after database hardening were 488/488, 77/77, 16/16; after the completion plan's Phase 1 they were 536/536, 86/86, 16/16; after Phase 2 (565/565, 93/93), Phase 3 (637/637, 105/105, 16/16), Phase 4 (734/734, 119/119, 16/16), and Phase 5 they are 779/779, 131/131, 16/16.
 
 ## Stage 5 implementation baseline (added 2026-11-08)
 
@@ -579,9 +579,9 @@ The `sveltex` CLI is a real, tested development tool — not a placeholder — a
 - **Commands (17):** `create`, `init`, `add`, `remove`, `generate`, `dev`, `build`, `preview`, `check`, `test`, `doctor`, `info`, `routes`, `modules`, `config`, `upgrade`, `migrate`. Delegated commands invoke the project's own package-manager scripts; the CLI does not reimplement Vite/SvelteKit/test-runner behavior.
 - **Templates:** six official starters (`minimal`, `fullstack`, `api`, `dashboard`, `saas`, `documentation`) with four welcome-page choices (`welcome`, `blank`, `dashboard`, `docs`). Each generates real editable SvelteKit source, a canonical `sveltex.config.ts`, and a dependency manifest. Six-template smoke generation produced 14–16 files per app and **zero unrendered placeholders**. The `saas` starter is a layout shell only: its README explicitly lists authentication, persistence, billing, subscriptions, and payments as **NOT included and NOT implied**.
 - **Safety:** `ChangeSet` preview/apply/rollback for every CLI-owned file; `--dry-run` writes nothing; overwrite requires `--force`/`--yes`; `init` composes an existing `src/hooks.server.ts` handle as `userHandle` with SvelteKit `sequence()` and preserves comments; `sveltex.config.ts` is inspected **as text** and never imported/executed, with secret redaction and env **names** only (never values or invented values); all child processes run with `shell: false` and argument arrays; project names, generated paths, package specifiers (including leading-dash option injection), encoded traversal, and NUL are rejected; conflicting lockfiles stop the command; a failed install rolls back all CLI-owned changes. `init --no-install` was fixed to actually skip installation and the automatic check (previously the flag was silently ignored).
-- **Integrations:** the registry lists only the 14 real shipped `@sveltex/*` packages and their compatibility metadata. No SMTP, S3, WebSocket, hosted-Redis, or other provider adapter is advertised. `upgrade` reports CLI-owned metadata only — no registry lookup, no guessed versions. `doctor` flags process-local adapters in multi-instance/production setups.
+- **Integrations:** the registry lists only the 14 real shipped `@sveltex/*` packages and their compatibility metadata. No SMTP, S3, hosted-Redis, or other external provider adapter is advertised by the CLI registry (`@sveltex/realtime` ships real WS/SSE gateways, not a hosted provider). `upgrade` reports CLI-owned metadata only — no registry lookup, no guessed versions. `doctor` flags process-local adapters in multi-instance/production setups.
 - **CLI output:** stable `CliResult`, single-object `--json` mode, and exit codes `0` (success), `1` (failure), `2` (usage), `3` (project/config/compatibility), `4` (cancelled). `runCli()` never calls `process.exit()` itself, so the API is embeddable and testable.
-- **Verification:** `pnpm --filter sveltex test` → 57/57; `npm pack --dry-run` → 173 files (41 templates + 32 `dist/*.js` + 32 `dist/*.d.ts` + metadata), no source/test leakage; real `create` and `init` smoke runs verified generated files, hooks composition, and rollback. `pnpm check` → 450/450 runtime, `pnpm test:security` → 71/71, `pnpm test:types` → 16/16 projects (Stage 5 baseline; totals after Phase 3 were 637/637, 105/105, 16/16; current totals after Phase 4 are 734/734, 119/119, 16/16).
+- **Verification:** `pnpm --filter sveltex test` → 57/57; `npm pack --dry-run` → 173 files (41 templates + 32 `dist/*.js` + 32 `dist/*.d.ts` + metadata), no source/test leakage; real `create` and `init` smoke runs verified generated files, hooks composition, and rollback. `pnpm check` → 450/450 runtime, `pnpm test:security` → 71/71, `pnpm test:types` → 16/16 projects (Stage 5 baseline; totals after Phase 3 were 637/637, 105/105, 16/16; current totals after Phase 5 are 779/779, 131/131, 16/16).
 
 **Not claimed:** generated apps have not been installed from a public registry (the workspace packages are unpublished), so a consumer-side `install → typecheck → build` pass remains CI work. The CLI ships no external provider adapters and does not claim distributed durability for any process-local adapter.
 
@@ -701,6 +701,22 @@ OAuth2/OIDC and MFA remain out of scope from Phase 2. All of these are documente
 Integration tests use a real Redis server; fallback failure tests use a genuinely unreachable
 port (`127.0.0.1:6399`) — no fake provider and no skipped test. Security findings
 SEC-041 – SEC-046 record the Phase 4 review.
+
+**Phase 5 verification (measured 2026-11-11, real ephemeral TCP ports + real `fetch` streams).** `@sveltex/realtime` →
+**70/70** (50 runtime + 20 security) plus a public-API subpath type test; full monorepo `pnpm check` →
+**779/779** runtime (0 failures, 0 skipped, 16 test projects), `pnpm test:security` → **131/131**
+(15 packages), `pnpm test:types` → **16/16**. `npm pack --dry-run --json` → **27 files**, 6 `dist/*.js` +
+6 `dist/*.d.ts`, version `0.1.0`, no `src`/`tests` leakage. Phase 4 → Phase 5: +45 runtime, +12 security.
+Integration tests use real `ws` sockets and real `node:http` servers on ephemeral ports, a genuinely
+unreachable port for reconnect/backpressure tests, and injectable clocks for deterministic heartbeats —
+no fake transport and no skipped test. Security findings SEC-047 – SEC-052 record the Phase 5 review.
+
+**Not claimed (Phase 5).** Both gateways are **single-process fan-out hubs**; there is no persistence,
+cross-instance fan-out, broker, or distributed lock. `allowAnonymous()` is an explicit development
+opt-in — production must supply a real `authenticate` policy plus TLS termination and rate limiting.
+SSE replay is bounded and channel-filtered, not durable history. The package version stays `0.1.0`
+with the rest of the workspace — the bump is deferred to the Phase 11 release audit. See the
+[Phase 5 report](./completion/phase-5-realtime.md).
 
 **Not claimed (Phase 4).** `StampedeGuard` is **process-local**; TTL jitter only de-synchronizes
 expiration across processes and is **not** a distributed lock. `FallbackCache` reads may be stale

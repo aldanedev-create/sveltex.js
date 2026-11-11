@@ -365,32 +365,39 @@ Package: `@sveltex/realtime`
 
 Provide reliable realtime communication.
 
+> **Delivered 2026-11-11 (completion-plan Phase 5).** Every task and test below is
+> implemented and verified — see the [`Phase 5 report`](./completion/phase-5-realtime.md).
+> No new package was created; `@sveltex/realtime` alone was extended with real `ws` /
+> `node:http` + `fetch` network adapters. Measured gate: **779/779 runtime, 131/131 security,
+> 16/16 type-test projects**, 0 failures, 0 skipped. Not claimed: a cross-instance broker,
+> persistence, TLS termination, gateway rate limiting or a distributed lock.
+
 ### Tasks
 
-- [ ] WebSocket transport.
-- [ ] Server-Sent Events transport.
-- [ ] Connection lifecycle.
-- [ ] Authentication integration.
-- [ ] Channel management.
-- [ ] Message validation.
-- [ ] Heartbeats.
-- [ ] Reconnection support.
-- [ ] Backpressure handling.
-- [ ] Error handling.
-- [ ] Graceful shutdown.
-- [ ] In-memory development and testing transport.
+- [x] WebSocket transport.
+- [x] Server-Sent Events transport.
+- [x] Connection lifecycle.
+- [x] Authentication integration.
+- [x] Channel management.
+- [x] Message validation.
+- [x] Heartbeats.
+- [x] Reconnection support.
+- [x] Backpressure handling.
+- [x] Error handling.
+- [x] Graceful shutdown.
+- [x] In-memory development and testing transport.
 
 ### Tests
 
-- [ ] Connection lifecycle.
-- [ ] Disconnections.
-- [ ] Authentication.
-- [ ] Channel authorization.
-- [ ] Message validation.
-- [ ] Backpressure.
-- [ ] Reconnection.
-- [ ] Concurrent clients.
-- [ ] Shutdown behavior.
+- [x] Connection lifecycle.
+- [x] Disconnections.
+- [x] Authentication.
+- [x] Channel authorization.
+- [x] Message validation.
+- [x] Backpressure.
+- [x] Reconnection.
+- [x] Concurrent clients.
+- [x] Shutdown behavior.
 
 ---
 

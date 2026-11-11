@@ -115,7 +115,37 @@ export class RealtimeDeliveryError extends RealtimeError {
   }
 }
 
-const CHANNEL_NAME = /^[A-Za-z0-9._:-]{1,128}$/;
+/** A malformed, oversized or unsafe network frame was received or encoded. */
+export class RealtimeProtocolError extends RealtimeError {
+  constructor(message: string, options: RealtimeErrorOptions = {}) {
+    super('SX_REALTIME_PROTOCOL', message, options);
+    this.name = 'RealtimeProtocolError';
+  }
+}
+
+/** A bounded send queue overflowed under backpressure. */
+export class RealtimeBackpressureError extends RealtimeError {
+  constructor(message: string, options: RealtimeErrorOptions = {}) {
+    super('SX_REALTIME_BACKPRESSURE', message, options);
+    this.name = 'RealtimeBackpressureError';
+  }
+}
+
+/** Connect, heartbeat or reconnect failure. */
+export class RealtimeConnectionError extends RealtimeError {
+  constructor(message: string, options: RealtimeErrorOptions = {}) {
+    super('SX_REALTIME_CONNECTION', message, options);
+    this.name = 'RealtimeConnectionError';
+  }
+}
+
+/**
+ * The one channel-name grammar shared by the hub and every network adapter. Exported so
+ * WebSocket/SSE gateways validate exactly the same names as `defineChannel`.
+ */
+export const REALTIME_CHANNEL_NAME = /^[A-Za-z0-9._:-]{1,128}$/;
+
+const CHANNEL_NAME = REALTIME_CHANNEL_NAME;
 
 /** Define a channel with a statically typed payload. Rejects names that could be used for injection. */
 export function defineChannel<TPayload>(name: string): ChannelDefinition<TPayload> {
