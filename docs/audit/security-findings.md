@@ -1,6 +1,7 @@
 # SvelteX Security Findings
 
-**Audit date:** 2026-11-11  
+**Audit date:** 2026-11-12
+
 **Auditor:** Security engineer
 
 ---
@@ -27,7 +28,7 @@
 | SEC-016 | Info | Reference-app authorization boundary | `examples/reference-app` rejects client-supplied `roles` on registration (self-privilege-escalation); `admin` is granted only via trusted `adminEmails` bootstrap config. Every privileged call resolves the principal from a live session **plus a fresh `users` row** — never a cached or client-supplied role. `createPost` derives `authorId` from the session (payload `authorId` ignored); all SQL is parameterized; `grantRole` uses an allow-list and invalidates the cached profile; `rotateSession` is atomic; session IDs are validated before use. Covered by 18 integration tests. | **Secure** |
 | SEC-017 | Info | Realtime authorization boundary | `RealtimeHub` requires an explicit `authorize` hook (no implicit allow) and evaluates `deliver` **per subscriber**; delivered payloads are deep-frozen; channel names reject traversal/control characters; at-least-once redelivery is de-duplicated by a bounded **per-subscriber** id cache (an initial global-set design was corrected). 8 pre-existing security tests; Phase 5 adds 12 (SEC-047 – SEC-052). | **Secure** |
 | SEC-018 | Info | Job queue atomicity and shutdown | `InMemoryJobQueue.claim()` is atomic so at-least-once redelivery cannot double-execute a side effect; `Worker.stop()` drains in-flight handlers while rejecting new work synchronously; retries/backoff are capped and permanent failures dead-letter instead of looping. Phase 6 extends this to `RedisJobQueue` (four Lua scripts for atomic cross-process enqueue/claim/finalize/cancel) and `SqlJobQueue` (transaction-based `FOR UPDATE SKIP LOCKED` claim, partial unique dedupe index, concurrent-safe schema creation). Strict `sveltex-jobs:v1:` serialization rejects corrupt/legacy/tampered records. 7 pre-existing + 10 Phase 6 security tests (SEC-053 – SEC-062). | **Secure** |
-| SEC-019 | Info | Storage path traversal and atomicity | User keys reject absolute paths, backslashes, `.`/`..` segments, and control characters, then map to **SHA-256 hex filenames** (user paths never reach the filesystem). Writes are atomic (temp + `rename`, metadata sidecar last); a symlinked `objects/` directory is rejected; reads verify etag/size. 9 security tests. | **Secure** |
+| SEC-019 | Info | Storage path traversal and atomicity | User keys reject absolute paths, backslashes, `.`/`..` segments, and control characters, then map to **SHA-256 hex filenames** (user paths never reach the filesystem). Writes are atomic (temp + `rename`, metadata sidecar last); a symlinked `objects/` directory is rejected; reads verify etag/size. Phase 7 extends this to S3 keys (never used as filesystem paths), SigV4 presigned URLs with bounded TTL, secret/URL/header checks, reserved-metadata and prototype-pollution rejection, and 9 real MinIO integration tests. 9 pre-existing + 9 Phase 7 security tests (SEC-063 – SEC-071). | **Secure** |
 | SEC-020 | Info | Mail header injection and XSS | CRLF/NUL injection is rejected in subjects, names, and headers; `renderTemplate` HTML-escapes interpolated values by default; bounded retries are deterministic and a permanent failure throws `MailSendError` with `attempts` + `cause` — never a false success. `TestTransport` never contacts an external service. 9 security tests. | **Secure** |
 | SEC-021 | Info | Testing helpers do not bypass real core | `@sveltex/testing` delegates to the real `@sveltex/core` DI/lifecycle, so config validation, request-scope enforcement, and lifecycle hook failures are surfaced rather than bypassed. `withTestApplication` guarantees cleanup even on a thrown body; forgotten request scopes are disposed; fakes expose frozen defensive snapshots and reject use after `close()`. 12 security tests. | **Secure** |
 | SEC-022 | Info | CLI never executes project configuration | `sveltex config`/`doctor` inspect `sveltex.config.ts` **as source text** (default-export detection, referenced env names, unsafe-exec markers) and never import or evaluate it. Shape validation is delegated to `@sveltex/config`. Secret values are redacted by key pattern and never printed; only missing env var **names** are reported — the CLI never invents or reads a value. 9 CLI security tests. | **Secure** |
@@ -370,6 +371,47 @@ provider, no substituted backend, **0 skipped**.
   Redis Cluster cross-slot routing, priority queues, cron/periodic schedule persistence, worker
   leader election, TLS/auth/rate limiting, or dead-letter replay tooling. These are recorded in
   the [Phase 6 report](../completion/phase-6-jobs.md), not hidden.
+
+### Completion-plan Phase 7 — storage security review (SEC-063 – SEC-071)
+
+**Status: Secure (with documented limitations)**
+
+The dedicated suite is `packages/storage/tests/security/phase7-security.test.mjs` (9 cases; with the
+pre-existing suite the package ships 18 security tests). The integration suite
+(`tests/integration/s3.test.mjs`, 9 cases) exercises a real MinIO S3-compatible server with the
+official AWS SDK v3 — objects are proven to exist via an independent client, presigned URLs are
+exercised with credential-free `fetch`, and tampered content types return 403. No fake provider,
+no substituted backend, **0 skipped**.
+
+- **Credential boundary (SEC-063).** `assertPresignedUrl` rejects any URL containing the configured
+  `secretAccessKey`, and only SigV4 URLs carrying `X-Amz-Signature` are returned. Signing is
+  SDK-side; the secret never appears in the URL, headers or the returned `PresignedRequest`.
+- **URL / endpoint boundary (SEC-064, SEC-065).** Presigned URLs must be HTTP(S) and must not
+  contain embedded userinfo; the configured `endpoint` rejects embedded credentials, query strings
+  and fragments before an `S3Client` is constructed. Hostile configuration fails closed with a
+  typed error rather than reaching a live backend.
+- **TTL boundary (SEC-066).** `resolvePresignOptions` requires a safe-integer TTL in
+  `1..604800` seconds (default 900); `null`, `NaN`, floats, zero, negatives and out-of-range values
+  are rejected before signing, so a caller cannot mint an effectively permanent URL by accident.
+- **Key boundary (SEC-067).** `validateKey` rejects traversal, absolute paths, backslashes,
+  control characters and overlong segments; S3 keys are namespaced under `keyPrefix` and never
+  used to build filesystem paths. Signed GET/PUT use the same validated key.
+- **Header-injection boundary (SEC-068).** `normalizeContentType` rejects CRLF/NUL and invalid
+  MIME types on every put and presign PUT; `content-type` is part of the SigV4 signature, so
+  changing it after signing invalidates the request (verified 403 against MinIO).
+- **Prototype-pollution / metadata boundary (SEC-069, SEC-070).** `normalizeCustom` rejects
+  `__proto__` / `constructor` / `prototype`; the S3 driver additionally forbids custom keys in the
+  reserved `sveltex-*` namespace, so a caller cannot forge the SHA-256 / creation-time integrity
+  metadata. Lower-cased metadata collisions are rejected rather than silently overwritten.
+- **Lifecycle / capability boundary (SEC-071).** A closed driver rejects every operation and
+  destroys its owned client; a driver without the optional `PresigningStorageDriver` capability
+  makes presign methods throw `StorageUnsupportedError` instead of silently returning a broken URL.
+  `NoSuchBucket` is surfaced as a diagnostic `StorageIOError`, never swallowed as a missing object.
+- **Not claimed.** No S3-side `ChecksumSHA256` assertion (integrity is a SvelteX-computed SHA-256
+  in user metadata); no multipart uploads, bucket creation, versioning, object locking,
+  server-side encryption configuration, replication, CDN or virus scanning; objects uploaded
+  directly through a presigned PUT honestly expose the service ETag, not a SvelteX hash. These
+  are recorded in the [Phase 7 report](../completion/phase-7-storage.md), not hidden.
 
 ## Recommendations
 

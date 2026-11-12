@@ -458,32 +458,36 @@ Package: `@sveltex/storage`
 
 Provide a consistent file storage API with local and cloud storage adapters.
 
+> **Delivered 2026-11-12 (completion-plan Phase 7).** Every task and test below is implemented and
+> verified against a real S3-compatible object store (MinIO, official AWS SDK v3). See the
+> [`Phase 7 report`](./completion/phase-7-storage.md).
+
 ### Tasks
 
-- [ ] Local filesystem storage.
-- [ ] S3-compatible storage adapter.
-- [ ] File uploads.
-- [ ] File downloads.
-- [ ] Streaming.
-- [ ] File metadata.
-- [ ] Presigned URLs.
-- [ ] Content-type validation.
-- [ ] File-size limits.
-- [ ] Safe path handling.
-- [ ] Storage lifecycle.
-- [ ] Error handling.
+- [x] Local filesystem storage.
+- [x] S3-compatible storage adapter.
+- [x] File uploads.
+- [x] File downloads.
+- [x] Streaming.
+- [x] File metadata.
+- [x] Presigned URLs.
+- [x] Content-type validation.
+- [x] File-size limits.
+- [x] Safe path handling.
+- [x] Storage lifecycle.
+- [x] Error handling.
 
 ### Tests
 
-- [ ] Uploads.
-- [ ] Downloads.
-- [ ] Streaming.
-- [ ] Metadata.
-- [ ] Presigned URLs.
-- [ ] File-size restrictions.
-- [ ] Path traversal protections.
-- [ ] Adapter behavior.
-- [ ] Storage failures.
+- [x] Uploads.
+- [x] Downloads.
+- [x] Streaming.
+- [x] Metadata.
+- [x] Presigned URLs.
+- [x] File-size restrictions.
+- [x] Path traversal protections.
+- [x] Adapter behavior.
+- [x] Storage failures.
 
 ---
 

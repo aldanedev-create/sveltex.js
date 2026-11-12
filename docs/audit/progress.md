@@ -124,7 +124,7 @@
 
 - [x] `@sveltex/realtime` — typed channels, required authorization hook, per-subscriber de-duplication, `InProcessTransport` (25 tests at that time). WebSocket/SSE adapters were delivered later in completion-plan Phase 5 (Session 12), bringing the package to 70 tests.
 - [x] `@sveltex/jobs` — `JobQueue` contract, `InMemoryJobQueue` (atomic claim, delayed visibility, dedupe, dead-letter), `Worker` (concurrency, retries, capped backoff, graceful shutdown) (24 tests). Durable/distributed broker adapters remain unshipped.
-- [x] `@sveltex/storage` — `StorageDriver` contract, `LocalStorageDriver` (real fs I/O, hashed keys, atomic writes, streaming, symlink rejection) (24 tests). S3/object-store adapters remain unshipped.
+- [x] `@sveltex/storage` — `StorageDriver` contract, `LocalStorageDriver` (real fs I/O, hashed keys, atomic writes, streaming, symlink rejection) (24 tests). S3/object-store adapters remain unshipped *(Stage 4 snapshot; delivered in Phase 7 — see Session 14)*.
 - [x] `@sveltex/mail` — message/template contracts, retrying `Mailer`, header-injection rejection, `TestTransport` (26 tests). SMTP/HTTP provider adapters remain unshipped.
 - [x] `@sveltex/testing` — builders over real core DI, deterministic clock/recorder, request fixtures, in-memory fakes (32 tests).
 
@@ -440,8 +440,8 @@ Per the [Existing Package Completion Plan](../completion-plan.md) Phase 5, exten
   `SseConnection.channels` updates via shared sets, and `httpServer.closeAllConnections?.()`.
 - **Verification (measured 2026-11-11, live PostgreSQL 16 / MySQL 8.0 / Redis 7):**
   `@sveltex/realtime` → **70/70** (50 runtime + 20 security) plus a public-API subpath type test;
-  full monorepo `pnpm check` → **806/806** runtime (0 failures, 0 skipped, 16 test projects),
-  `pnpm test:security` → **141/141** (16 packages), `pnpm test:types` → **16/16**.
+  full monorepo `pnpm check` → **779/779** runtime (0 failures, 0 skipped, 16 test projects),
+  `pnpm test:security` → **131/131** (16 packages), `pnpm test:types` → **16/16**.
   `npm pack --dry-run --json` → **27 files**, 6 `dist/*.js` + 6 `dist/*.d.ts`, version `0.1.0`,
   no `src`/`tests` leakage. Phase 4 → Phase 5: **+45 runtime, +12 security**. No test skipped.
 - **Docs synced:** `README.md`, `docs/roadmap.md`, `docs/specification.md` (realtime row, Stage 4
@@ -499,3 +499,56 @@ final `--fresh` rebuild recorded in audit README).
 
 **Next:** Phase 7 (`@sveltex/storage`) per the plan. Phases 7–12 remain.
 
+## Session 14 — Completion Plan: Phase 7 — `@sveltex/storage` (2026-11-12)
+
+**Objective:** close the Phase 0 gap for `@sveltex/storage` — a real S3-compatible adapter and
+presigned URLs — without creating a new package, with no fake provider and no skipped test.
+
+**Implementation:**
+- New `packages/storage/src/s3.ts`: `S3StorageDriver` implementing `PresigningStorageDriver` on the
+  official `@aws-sdk/client-s3` (real `PutObject` / `GetObject` / `HeadObject` / `DeleteObject` /
+  paginated `ListObjectsV2`), SigV4 presigning via `@aws-sdk/s3-request-presigner`, S3 user-metadata
+  integrity (`x-amz-meta-sveltex-sha256`, `x-amz-meta-sveltex-created-at`), strict metadata parsing,
+  `StorageIOError` with operation/backend/cause, owned-client lifecycle.
+- `src/index.ts` extended with `PresignOptions`, `ResolvedPresignOptions`, `PresignedRequest`,
+  `PresigningStorageDriver`, `resolvePresignOptions`, `Storage.presignGet` / `presignPut`,
+  `#requirePresigning()`, `StorageUnsupportedError` and TTL constants (1..604800 s, default 900);
+  `normalizeCustom` hardened against prototype-polluting keys.
+- New `./s3` subpath export + `test:integration` script; real AWS SDK dependencies; version stays `0.1.0`.
+- `.github/workflows/ci.yml`: MinIO started as an explicit step (the image requires `server /data`),
+  S3 env vars and a mandatory `pnpm --filter @sveltex/storage test:integration`. Never skipped.
+- **Fixed during implementation:** `resolvePresignOptions` treated a `null` TTL as absent (now an
+  explicit safe-integer check); `NoSuchBucket` was swallowed as a missing object (now a hard
+  `StorageIOError`); prototype-pollution tests now build a null-prototype object carrying a real
+  own `__proto__` key; the security-suite import path and duplicate type-test identifiers were corrected.
+
+**Verification (measured 2026-11-12, live PostgreSQL 16 / MySQL 8.0 / Redis 7 / MinIO):**
+- `pnpm check` → **826/826** runtime, 0 failures, 0 skipped, 16 test projects.
+- `pnpm test:security` → **150/150**, 16 packages, 0 failures, 0 skipped.
+- `pnpm test:types` → **16/16**.
+- `pnpm --filter @sveltex/storage test` → **44/44**; `test:integration` → **9/9** real MinIO.
+- `pnpm --filter @sveltex/jobs test:integration` → **17/17** (no regression).
+- `npm pack --dry-run` → `@sveltex/storage` 0.1.0, 15 files.
+- Phase 6 → Phase 7: **+20 runtime, +9 security, +9 real integration tests**. No test skipped.
+
+**Docs synced:** `README.md`, `docs/roadmap.md`, `docs/specification.md`, `docs/packages/README.md`,
+`docs/manifest.json` (42 documents), `docs/completion-plan.md` (all 21 Phase 7 checkboxes),
+`docs/completion/phase-0-audit.md` (gap → completion, criteria, bottom line), `docs/audit/*`
+(README, package-status, testing-status, repository-audit, security-findings SEC-063 – SEC-071,
+progress), `packages/storage/README.md` + `CHANGELOG.md`, and the new
+[`Phase 7 report`](../completion/phase-7-storage.md).
+
+Earlier "S3/object-store adapters remain unshipped" lines in this log (Sessions 5–12) are
+**historical Stage 4 / Phase 6-era snapshots**, superseded by this session; they are retained
+verbatim for audit traceability, not as current status.
+
+**Not claimed:** multipart uploads, bucket creation, versioning, object locking, server-side
+encryption configuration, replication, CDN, virus scanning, S3-side checksum assertion; objects
+uploaded via presigned PUT expose the service ETag. SvelteKit `handle` wiring (Phase 10) and the
+package version bump (Phase 11) remain. All are recorded in the Phase 7 report.
+
+**XERJ:** used for repository research throughout Phase 7 (HTTP search on the `ax-docs` index for
+storage/S3/presign requirements and the specification/audit inventory); final `--fresh` rebuild
+numbers are recorded in `docs/audit/README.md`.
+
+**Next:** Phase 8 (`@sveltex/mail`) per the plan. Phases 8–12 remain.

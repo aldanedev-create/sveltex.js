@@ -20,8 +20,9 @@ added). Runtime tests are counted from real `pnpm -r test`, `pnpm check` = **488
 `pnpm test:security` = **77/77**, type-test projects = **16/16**. These are the **Phase 0
 snapshot** (a historical baseline retained for audit traceability); after Phase 1 the measured
 totals were **536/536 runtime / 86/86 security**, after Phase 2 **565/565 / 93/93**, and after
-Phase 3 **637/637 runtime / 105/105 security**, after Phase 4 **734/734 runtime / 119/119 security**, and after Phase 5 (current)
-**806/806 runtime / 141/141 security** — see the [Phase 6 report](./phase-6-jobs.md).
+Phase 3 **637/637 runtime / 105/105 security**, after Phase 4 **734/734 runtime / 119/119 security**, after Phase 5 **779/779 runtime / 131/131 security**, after Phase 6
+**806/806 runtime / 141/141 security**, and after Phase 7 (current)
+**826/826 runtime / 150/150 security** — see the [Phase 7 report](./phase-7-storage.md).
 
 | Package | src files | src lines | runtime tests | subpath exports | engines |
 |---|---:|---:|---:|---|---|
@@ -169,7 +170,7 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 > **Phase 5 outcome (2026-11-11):** see the [Phase 5 report](./phase-5-realtime.md). All former
 > gaps are closed with real implementations, real tests, security findings SEC-047 – SEC-052,
 > and four new subpath exports. No new package was created. Runtime 25 → 70,
-> security 8 → 20; monorepo 734 → 779 → 806 runtime / 119 → 131 → 141 security.
+> security 8 → 20; monorepo 734 → 779 → 806 → 826 runtime / 119 → 131 → 141 → 150 security.
 
 ### Phase 6 — `@sveltex/jobs` (completed 2026-11-12)
 | Requirement | State | Reality |
@@ -189,11 +190,20 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 > grew from 24 to 51 runtime/security tests; measured monorepo totals are recorded in the
 > Phase 6 report. The former README claim "no broker/provider adapter" is retired.
 
-### Phase 7 — `@sveltex/storage`
+### Phase 7 — `@sveltex/storage` — ✅ delivered (2026-11-12)
 | Requirement | State | Reality |
 |---|:---:|---|
-| Local FS, streaming, metadata, path-traversal safety | ✅ | `./local` |
-| **S3-compatible adapter, presigned URLs, content-type validation, size limits** | ✗ | README: "no S3/GCS/Azure provider adapter" |
+| Local FS, streaming, metadata, path-traversal safety | ✅ | `./local` (semantics preserved) |
+| S3-compatible adapter | ✅ | `S3StorageDriver` (`./s3`), official `@aws-sdk/client-s3`, real Put/Get/Head/Delete/List; verified against live MinIO |
+| Presigned URLs (GET / PUT) | ✅ | `Storage.presignGet` / `presignPut` via `@aws-sdk/s3-request-presigner` SigV4; TTL 1..604800 s (default 900); signed `content-type`; credential-free `fetch` verified |
+| Content-type validation, size limits, safe path handling | ✅ | facade `normalizeContentType` / `maxObjectSizeBytes` / `validateKey`; S3 driver `maxUploadBytes`; CRLF-header-injection and traversal rejected |
+| Metadata and integrity | ✅ | SHA-256 etag + creation time as S3 user metadata; strict parse on read; reserved `sveltex-*` and prototype-polluting keys rejected |
+| Storage lifecycle / error handling | ✅ | `StorageIOError` with operation/backend/cause; missing bucket is a hard error; owned client destroyed on `close()`; `StorageUnsupportedError` for drivers without presigning |
+| Real tests | ✅ | 44 runtime + 18 security + 1 public-API type test + 9 real MinIO integration tests, 0 skipped |
+| No new package; version stays `0.1.0` | ✅ | core rule honored |
+
+See the [`Phase 7 report`](./phase-7-storage.md) for architecture, measured gates and honest
+"Not claimed" limitations.
 
 ### Phase 8 — `@sveltex/mail`
 | Requirement | State | Reality |
@@ -269,19 +279,19 @@ real template capability demos), not as a from-scratch build.
 | Criterion | Now |
 |---|:---:|
 | All packages audited | ✅ this document |
-| Required functionality implemented | ◐ (Phases 0–6 done; 7–12 pending) |
+| Required functionality implemented | ◐ (Phases 0–7 done; 8–12 pending) |
 | Database supports built-in ORM integrations + custom adapters | ✅ Phase 1 done (Drizzle/Kysely + BYO) |
 | Public APIs / TypeScript types stable | ✅ (current surface) |
-| Unit/integration/security/type tests pass | ✅ 806 / 141 / 16 (Phase 6) |
+| Unit/integration/security/type tests pass | ✅ 826 / 150 / 16 (Phase 7) |
 | Packages build and install independently | ◐ (frozen install works; clean consumer install not verified) |
 | Cross-package scenarios work | ✗ (2 of 13) |
-| Documentation matches implementation | ✅ (Phase 6 doc sync complete) |
+| Documentation matches implementation | ✅ (Phase 7 doc sync complete) |
 | Generated apps build and run | ◐ (in-monorepo only) |
 | Production-readiness checks pass | ✗ |
 
 **Bottom line:** the repository is clean, honest, and fully tested for what it currently
-promises. Completion-plan Phases 0–6 (audit, database ORM integrations, auth, sessions, cache,
-realtime, jobs) are delivered with real implementations, real integration tests and synced documentation;
-the measured gate is 806/806 runtime, 141/141 security, 16/16 type-test projects. Phases 7–12
-(storage, mail, validation/testing, cross-package integration,
-production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 7.
+promises. Completion-plan Phases 0–7 (audit, database ORM integrations, auth, sessions, cache,
+realtime, jobs, storage) are delivered with real implementations, real integration tests and synced documentation;
+the measured gate is 826/826 runtime, 150/150 security, 16/16 type-test projects. Phases 8–12
+(mail, validation/testing, cross-package integration,
+production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 8.

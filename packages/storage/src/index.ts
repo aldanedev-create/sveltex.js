@@ -90,6 +90,77 @@ export class StorageIOError extends StorageError {
     this.name = 'StorageIOError';
   }
 }
+export class StorageUnsupportedError extends StorageError {
+  constructor(message: string, options: StorageErrorOptions = {}) {
+    super('SX_STORAGE_UNSUPPORTED', message, options);
+    this.name = 'StorageUnsupportedError';
+  }
+}
+
+/** Options accepted by `Storage.presignGet` / `Storage.presignPut`. */
+export interface PresignOptions {
+  /** Lifetime of the URL in seconds (1..604800). Defaults to 900 (15 minutes). */
+  readonly expiresInSeconds?: number;
+  /** For PUT: the exact `Content-Type` header the uploader must send. */
+  readonly contentType?: string;
+  /** For PUT: custom metadata the uploader must send as `x-amz-meta-*` headers. */
+  readonly custom?: Readonly<Record<string, string>>;
+}
+
+/** Validated, frozen presign options handed to a driver. */
+export interface ResolvedPresignOptions {
+  readonly expiresInSeconds: number;
+  readonly contentType: string | undefined;
+  readonly custom: Readonly<Record<string, string>>;
+}
+
+/** A signed, time-limited direct-to-storage HTTP request. */
+export interface PresignedRequest {
+  readonly url: string;
+  readonly method: 'GET' | 'PUT';
+  /** Headers that MUST be sent verbatim for the signature to validate. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** Epoch milliseconds at which the URL stops working. */
+  readonly expiresAt: number;
+}
+
+/** Optional driver capability: not every backend can issue signed URLs. */
+export interface PresigningStorageDriver extends StorageDriver {
+  presignGet(key: string, options: ResolvedPresignOptions, now: number): Promise<PresignedRequest>;
+  presignPut(key: string, options: ResolvedPresignOptions, now: number): Promise<PresignedRequest>;
+}
+
+export const MIN_PRESIGN_TTL_SECONDS = 1;
+export const MAX_PRESIGN_TTL_SECONDS = 604800;
+export const DEFAULT_PRESIGN_TTL_SECONDS = 900;
+
+/** Validate and freeze presign options before any driver I/O. */
+export function resolvePresignOptions(
+  options: PresignOptions,
+  maxCustomMetadataBytes: number,
+): ResolvedPresignOptions {
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new StorageValidationError('Presign options must be an object.');
+  }
+  const requested = options.expiresInSeconds;
+  if (
+    requested !== undefined &&
+    (typeof requested !== 'number' ||
+      !Number.isSafeInteger(requested) ||
+      requested < MIN_PRESIGN_TTL_SECONDS ||
+      requested > MAX_PRESIGN_TTL_SECONDS)
+  ) {
+    throw new StorageValidationError(
+      `expiresInSeconds must be an integer between ${MIN_PRESIGN_TTL_SECONDS} and ${MAX_PRESIGN_TTL_SECONDS}.`,
+    );
+  }
+  const expiresInSeconds = requested ?? DEFAULT_PRESIGN_TTL_SECONDS;
+  const contentType = options.contentType === undefined
+    ? undefined
+    : normalizeContentType(options.contentType);
+  const custom = normalizeCustom(options.custom, maxCustomMetadataBytes);
+  return Object.freeze({ expiresInSeconds, contentType, custom });
+}
 
 const KEY_SEGMENT = /^[A-Za-z0-9._~@+-]+$/;
 const CONTENT_TYPE = /^[A-Za-z0-9.!#$&^_*+-]+\/[A-Za-z0-9.!#$&^_*+-]+(?:\s*;\s*[A-Za-z0-9.!#$&^_*+-]+="?[A-Za-z0-9.!#$&^_*+ /=-]+"?)?$/;
@@ -146,6 +217,9 @@ export function normalizeCustom(
   const copy: Record<string, string> = {};
   for (const [k, v] of entries) {
     if (!CUSTOM_KEY.test(k)) throw new StorageValidationError('Invalid custom metadata key.');
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') {
+      throw new StorageValidationError('Invalid custom metadata key: prototype-polluting names are forbidden.');
+    }
     if (typeof v !== 'string') throw new StorageValidationError('custom metadata values must be strings.');
     if (/[\r\n\u0000-\u001f\u007f]/.test(v)) throw new StorageValidationError('custom metadata values must not contain control characters.');
     if (v.length > 1024) throw new StorageValidationError('custom metadata values must not exceed 1024 characters.');
@@ -291,6 +365,32 @@ export class Storage {
     this.#assertOpen();
     validatePrefix(prefix);
     return this.#call(() => this.#driver.list(prefix));
+  }
+
+  /** Issue a signed, time-limited direct-download URL (requires a presigning driver). */
+  async presignGet(key: string, options: PresignOptions = {}): Promise<PresignedRequest> {
+    this.#assertOpen();
+    validateKey(key);
+    const resolved = resolvePresignOptions(options, this.#maxCustomMetadataBytes);
+    const driver = this.#requirePresigning();
+    return this.#call(() => driver.presignGet(key, resolved, this.#now()));
+  }
+
+  /** Issue a signed, time-limited direct-upload URL (requires a presigning driver). */
+  async presignPut(key: string, options: PresignOptions = {}): Promise<PresignedRequest> {
+    this.#assertOpen();
+    validateKey(key);
+    const resolved = resolvePresignOptions(options, this.#maxCustomMetadataBytes);
+    const driver = this.#requirePresigning();
+    return this.#call(() => driver.presignPut(key, resolved, this.#now()));
+  }
+
+  #requirePresigning(): PresigningStorageDriver {
+    const candidate = this.#driver as Partial<PresigningStorageDriver>;
+    if (typeof candidate.presignGet !== 'function' || typeof candidate.presignPut !== 'function') {
+      throw new StorageUnsupportedError('The configured storage driver does not support presigned URLs.');
+    }
+    return candidate as PresigningStorageDriver;
   }
 
   async close(): Promise<void> {

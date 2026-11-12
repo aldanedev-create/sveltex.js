@@ -21,12 +21,12 @@
 | `@sveltex/example-reference-app` | ✅ Pass | ✅ Pass | ✅ 18/18 | N/A | ✅ Pass | **Stage 3 — Exit criterion met** |
 | `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 70/70 | ✅ 20/20 | ✅ Pass | **Stage 4 — Complete (Phase 5: real WS/SSE gateways, strict protocol, connection lifecycle)** |
 | `@sveltex/jobs` | ✅ Pass | ✅ Pass | ✅ 51/51 | ✅ 17/17 | ✅ Pass | **Stage 4 — Complete (Phase 6: real Redis + SQL queues, strict serialization, registry, scheduler)** |
-| `@sveltex/storage` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (local disk)** |
+| `@sveltex/storage` | ✅ Pass | ✅ Pass | ✅ 44/44 | ✅ 18/18 | ✅ Pass | **Stage 4 — Complete (Phase 7: real S3 + presigned URLs)** |
 | `@sveltex/mail` | ✅ Pass | ✅ Pass | ✅ 26/26 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (test transport)** |
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **806/806** | **141/141** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **826/826** | **150/150** | **16/16** | **All pass** |
 
 ---
 
@@ -162,13 +162,13 @@ All five packages are independently installable ESM packages with strict `tsconf
 - **Missing (explicit, not advertised):** MySQL SQL dialect, distributed lock, cron/recurring schedules, workflow DAGs, SvelteKit `handle` wiring (Phase 10).
 - **Limitation:** cross-process dedupe beyond the queue's own dedupe key is not claimed; package version stays `0.1.0` (bump deferred to Phase 11).
 
-#### `@sveltex/storage` — ✅ Ready (local disk)
+#### `@sveltex/storage` — ✅ Complete (Phase 7: real S3 + presigned URLs)
 
-- **Source:** `src/index.ts` (contracts, validation, streaming helpers, `Storage` facade) + `src/local.ts`.
-- **Public API:** `Storage`, `StorageDriver`, `ObjectMetadata`, `PutOptions`, `LocalStorageDriver` (`./local`), and the `StorageError` family.
-- **Features:** key/content-type/custom-metadata/size validation before I/O; SHA-256 hashed filenames (user paths never reach disk); atomic temp + `rename` writes with metadata published last; Web `ReadableStream<Uint8Array>` reads; symlink rejection; etag/size integrity metadata.
-- **Tests:** 24 — 15 unit + 9 security, including a real filesystem-persistence integration test and path-traversal tests.
-- **Limitations:** local filesystem only; not a distributed object store; no S3 adapter is shipped or advertised.
+- **Source:** `src/index.ts` (contracts, validation, streaming helpers, `Storage` facade, presign contracts), `src/local.ts`, `src/s3.ts`.
+- **Public API:** `Storage`, `StorageDriver`, `PresigningStorageDriver`, `ObjectMetadata`, `PutOptions`, `PresignOptions` / `ResolvedPresignOptions` / `PresignedRequest`, `resolvePresignOptions`, TTL constants, `LocalStorageDriver` (`./local`), `S3StorageDriver` / `S3StorageDriverOptions` / `S3StorageCredentials` (`./s3`), and the `StorageError` family (incl. `StorageUnsupportedError`).
+- **Features:** key/content-type/custom-metadata/size validation before I/O; local driver with SHA-256 hashed filenames, atomic temp + `rename` writes, Web `ReadableStream<Uint8Array>` reads, symlink rejection; a real S3-compatible driver on the official AWS SDK v3 (`PutObject` / `GetObject` / `HeadObject` / `DeleteObject` / paginated `ListObjectsV2`), SigV4 presigned GET/PUT with TTL bounds (1..604800 s, default 900), S3 user-metadata integrity (`x-amz-meta-sveltex-sha256`), strict metadata parsing, prototype-pollution and reserved-`sveltex-*` rejection, `StorageIOError` with operation/backend/cause, owned-client lifecycle.
+- **Tests:** 44 runtime + 18 security + one public-API type test + **9 real MinIO integration tests** (round-trip, streaming, listing, deletion, presigned GET/PUT with tamper and expiry, traversal, size limits, missing-bucket diagnostics, persistence across instances); **0 skipped**.
+- **Limitations:** presigned PUT uploads expose the service ETag (not a SvelteX SHA-256) because the driver never receives those bytes; no multipart uploads, bucket creation, versioning, object locking, server-side encryption configuration, replication, CDN or virus scanning; package version stays `0.1.0` (Phase 11).
 
 #### `@sveltex/mail` — ✅ Ready (test transport)
 

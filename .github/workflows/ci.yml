@@ -47,6 +47,10 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379
       SVELTEX_TEST_POSTGRES_URL: postgresql://sveltex:sveltex_test_pw@127.0.0.1:5432/sveltex_test
       SVELTEX_TEST_MYSQL_URL: mysql://sveltex:sveltex_test_pw@127.0.0.1:3306/sveltex_test
+      SVELTEX_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      SVELTEX_TEST_S3_REGION: us-east-1
+      SVELTEX_TEST_S3_ACCESS_KEY: sveltex
+      SVELTEX_TEST_S3_SECRET_KEY: sveltex_test_pw
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -55,9 +59,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # Real S3-compatible object store for @sveltex/storage. The MinIO image
+      # needs an explicit `server /data` command, so it is started as a step.
+      - name: Start MinIO (S3-compatible)
+        run: |
+          docker run -d --name sveltex-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=sveltex \
+            -e MINIO_ROOT_PASSWORD=sveltex_test_pw \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs sveltex-minio
+          exit 1
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm test:security
       # Real Redis / PostgreSQL integration tests for @sveltex/jobs. The service
       # containers above are mandatory; these tests are never skipped.
       - run: pnpm --filter @sveltex/jobs test:integration
+      # Real MinIO (S3) integration tests for @sveltex/storage. Never skipped.
+      - run: pnpm --filter @sveltex/storage test:integration
