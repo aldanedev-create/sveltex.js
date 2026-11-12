@@ -20,6 +20,30 @@
     "./in-memory": {
       "types": "./dist/in-memory.d.ts",
       "import": "./dist/in-memory.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "import": "./dist/validation.js"
+    },
+    "./serialization": {
+      "types": "./dist/serialization.d.ts",
+      "import": "./dist/serialization.js"
+    },
+    "./registry": {
+      "types": "./dist/registry.d.ts",
+      "import": "./dist/registry.js"
+    },
+    "./scheduler": {
+      "types": "./dist/scheduler.d.ts",
+      "import": "./dist/scheduler.js"
+    },
+    "./redis": {
+      "types": "./dist/redis.d.ts",
+      "import": "./dist/redis.js"
+    },
+    "./sql": {
+      "types": "./dist/sql.d.ts",
+      "import": "./dist/sql.js"
     }
   },
   "scripts": {
@@ -29,6 +53,7 @@
     "test": "npm run build && node --test tests/*.test.mjs tests/security/*.test.mjs && tsc -p tests/types/tsconfig.json",
     "test:unit": "npm test",
     "test:security": "npm run build && node --test tests/security/*.test.mjs",
+    "test:integration": "npm run build && node --test tests/integration/*.test.mjs",
     "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
     "test:coverage": "npm run build && node --experimental-test-coverage --test"
   },
@@ -46,9 +71,11 @@
     "retries"
   ],
   "dependencies": {
-    "@sveltex/shared": "workspace:*"
+    "@sveltex/shared": "workspace:*",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
+    "@sveltex/database": "workspace:*",
     "@types/node": "^26.6.6"
   }
 }

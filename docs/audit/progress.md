@@ -1,6 +1,6 @@
 # SvelteX Progress Log
 
-**Last updated:** 2026-11-11
+**Last updated:** 2026-11-12
 
 ---
 
@@ -440,8 +440,8 @@ Per the [Existing Package Completion Plan](../completion-plan.md) Phase 5, exten
   `SseConnection.channels` updates via shared sets, and `httpServer.closeAllConnections?.()`.
 - **Verification (measured 2026-11-11, live PostgreSQL 16 / MySQL 8.0 / Redis 7):**
   `@sveltex/realtime` → **70/70** (50 runtime + 20 security) plus a public-API subpath type test;
-  full monorepo `pnpm check` → **779/779** runtime (0 failures, 0 skipped, 16 test projects),
-  `pnpm test:security` → **131/131** (15 packages), `pnpm test:types` → **16/16**.
+  full monorepo `pnpm check` → **806/806** runtime (0 failures, 0 skipped, 16 test projects),
+  `pnpm test:security` → **141/141** (16 packages), `pnpm test:types` → **16/16**.
   `npm pack --dry-run --json` → **27 files**, 6 `dist/*.js` + 6 `dist/*.d.ts`, version `0.1.0`,
   no `src`/`tests` leakage. Phase 4 → Phase 5: **+45 runtime, +12 security**. No test skipped.
 - **Docs synced:** `README.md`, `docs/roadmap.md`, `docs/specification.md` (realtime row, Stage 4
@@ -457,4 +457,45 @@ and channel-filtered, not durable history. SvelteKit `handle` wiring (Phase 10) 
 version bump (Phase 11) remain. All are recorded in the Phase 5 report.
 
 **Next:** Phase 6 (`@sveltex/jobs`) per the plan. Phases 6–12 remain.
+
+## Session 13 — Completion Plan: Phase 6 — `@sveltex/jobs` (2026-11-12)
+
+**Objective:** close the Phase 0 gap for `@sveltex/jobs` — Redis-backed queue, DB-backed queue,
+persistence — without creating a new package.
+
+**Implementation:**
+- New modules: `validation.ts` (shared backend-independent validation), `serialization.ts`
+  (strict `sveltex-jobs:v1:` payload/record envelope), `redis.ts` (`RedisJobQueue` with real
+  `ioredis` + four Lua scripts), `sql.ts` (`SqlJobQueue` with BYO `JobSqlExecutor`, SQLite /
+  PostgreSQL, `FOR UPDATE SKIP LOCKED`), `registry.ts` (`JobRegistry`), `scheduler.ts`
+  (`JobScheduler`).
+- `src/index.ts` extended with `JobQueue.cancel(id)`, `JobsSerializationError`,
+  `JobsConfigurationError`, `JobsStoreError`.
+- `src/in-memory.ts` rewritten to use shared validation; existing semantics preserved.
+- Six new subpath exports; `ioredis@^6.0.0` runtime dependency.
+- Fixed a real production defect: PostgreSQL `CREATE TABLE IF NOT EXISTS` is not concurrent-safe
+  across connections (`duplicate key` on `pg_type`). `#createSchema` now catches and swallows
+  `duplicate_table` / unique-violation when the table/index already exists.
+
+**Verification (measured 2026-11-12, live PostgreSQL 16 / MySQL 8.0 / Redis 7):**
+- `pnpm check` → **806/806** runtime, 0 failures, 0 skipped, 16 test projects.
+- `pnpm test:security` → **141/141**, 16 packages, 0 failures, 0 skipped.
+- `pnpm --filter @sveltex/jobs test:integration` → **17/17** (Redis 7 + SQLite + PostgreSQL 16).
+- `pnpm test:types` → **16/16**.
+- `npm pack --dry-run` → `@sveltex/jobs` 0.1.0, 35 files.
+
+**Docs synced:** `packages/jobs/README.md`, `packages/jobs/CHANGELOG.md`,
+`docs/completion/phase-6-jobs.md` (new), `docs/completion-plan.md` (Phase 6 checked),
+`docs/completion/phase-0-audit.md` (gap → completion), `docs/audit/README.md`,
+`docs/audit/package-status.md`, `docs/audit/testing-status.md`, `docs/audit/security-findings.md`,
+`docs/audit/repository-audit.md`, `docs/audit/progress.md`, `docs/specification.md`,
+`docs/packages/README.md`, `docs/roadmap.md`, `README.md`, `docs/manifest.json`.
+
+**Not claimed:** MySQL SQL dialect, distributed lock, cron/recurring schedules, workflow DAGs,
+SvelteKit `handle` wiring (Phase 10). Package version stays `0.1.0` (Phase 11).
+
+**XERJ:** used for repository research throughout Phase 6 (HTTP search on `ax-docs` index;
+final `--fresh` rebuild recorded in audit README).
+
+**Next:** Phase 7 (`@sveltex/storage`) per the plan. Phases 7–12 remain.
 

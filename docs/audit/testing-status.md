@@ -20,24 +20,25 @@
 | `@sveltex/session` | 104 | 13 | ✅ | ✅ SQLite + real PG/MySQL/Redis + real AuthService | All pass |
 | `@sveltex/example-reference-app` | 18 | — | ✅ | ✅ Memory + Redis | All pass |
 | `@sveltex/realtime` | 70 | 20 | ✅ | ✅ Real WS/SSE gateways on ephemeral TCP ports + in-process | All pass |
-| `@sveltex/jobs` | 24 | 7 | ✅ | ✅ In-memory queue | All pass |
+| `@sveltex/jobs` | 51 | 17 | ✅ | ✅ Real Redis 7 + SQLite + PostgreSQL 16 | All pass |
 | `@sveltex/storage` | 24 | 9 | ✅ | ✅ Real filesystem I/O | All pass |
 | `@sveltex/mail` | 26 | 9 | ✅ | ✅ Test transport | All pass |
 | `@sveltex/testing` | 32 | 12 | ✅ | ✅ Real core DI | All pass |
 | `sveltex` (CLI) | 57 | 9 | ✅ | ✅ Real fs + recorder runner | All pass |
-| **Total** | **779** | **131** | **16/16** | — | **All pass** |
+| **Total** | **806** | **141** | **16/16** | — | **All pass** |
 
 `pnpm test` is the per-package script count summed by `pnpm -r test` (the `pnpm check` gate);
-`test:security` is the standalone `pnpm test:security` chain. Both were measured on 2026-11-11
+`test:security` is the standalone `pnpm test:security` chain. Both were measured on 2026-11-12
 with live services: **0 failures, 0 skipped**. `npm pack --dry-run` for `@sveltex/session` → 27 files; for `@sveltex/cache` → 43 files
-(10 `dist/*.js` + 10 `dist/*.d.ts` pairs), and for `@sveltex/realtime` → 27 files
-(6 `dist/*.js` + 6 `dist/*.d.ts` pairs, four new subpath declarations, no src/test leakage).
+(10 `dist/*.js` + 10 `dist/*.d.ts` pairs), for `@sveltex/realtime` → 27 files
+(6 `dist/*.js` + 6 `dist/*.d.ts` pairs), and for `@sveltex/jobs` → 35 files
+(8 `dist/*.js` + 8 `dist/*.d.ts` pairs, six new subpath declarations, no src/test leakage).
 
 ---
 
 ## Test infrastructure
 
-> **Counting note (updated 2026-11-11, Phase 5):** `779` is the measured total of `pnpm -r test` (the `pnpm check` gate): 546 Stage 1–3 + reference app, 176 Stage 4, 57 Stage 5 CLI. `131` is the measured total of the standalone `pnpm test:security` chain (65 Stage 1–3 + 57 Stage 4 + 9 Stage 5 CLI). These are **two distinct gates, not an additive total** — Stage 4 packages, the CLI, `@sveltex/session`, `@sveltex/cache` and `@sveltex/realtime` include their `tests/security/*.test.mjs` files inside the package `test` script, so those security cases are also counted within 779; the separate `test:security` gate re-runs them. Phase 2 added 29 runtime + 7 security (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security (session 32→104 / 1→13); Phase 4 added 97 runtime + 14 security (cache 24→121 / 1→15); Phase 5 added 45 runtime + 12 security (realtime 25→70 / 8→20). Both gates were re-run on 2026-11-11 with live PostgreSQL 16, MySQL 8.0 and Redis 7: exit 0, 0 failures, 0 skipped, 16 test projects (`test:types`). No carried baseline, no skipped test.
+> **Counting note (updated 2026-11-12, Phase 6):** `806` is the measured total of `pnpm -r test` (the `pnpm check` gate): 546 Stage 1–3 + reference app, 203 Stage 4, 57 Stage 5 CLI. `141` is the measured total of the standalone `pnpm test:security` chain (65 Stage 1–3 + 67 Stage 4 + 9 Stage 5 CLI). These are **two distinct gates, not an additive total** — Stage 4 packages, the CLI, `@sveltex/session`, `@sveltex/cache` and `@sveltex/realtime` include their `tests/security/*.test.mjs` files inside the package `test` script, so those security cases are also counted within 806; the separate `test:security` gate re-runs them. Phase 2 added 29 runtime + 7 security (auth 29→58 / 1→8); Phase 3 added 72 runtime + 12 security (session 32→104 / 1→13); Phase 4 added 97 runtime + 14 security (cache 24→121 / 1→15); Phase 5 added 45 runtime + 12 security (realtime 25→70 / 8→20); Phase 6 added 27 runtime + 10 security (jobs 24→51 / 7→17) plus 17 real integration tests. Both gates were re-run on 2026-11-12 with live PostgreSQL 16, MySQL 8.0 and Redis 7: exit 0, 0 failures, 0 skipped, 16 test projects (`test:types`). No carried baseline, no skipped test.
 
 ### Runner
 
@@ -116,7 +117,7 @@ Each package has `tests/types/public-api.test.ts` verifying:
 | Stage 3 reference app (in-process) | ✅ `node:sqlite` + `@node-rs/argon2` + Memory stores | ✅ 16 integration tests pass |
 | Stage 3 reference app (distributed) | ✅ live Redis for BOTH session + cache | ✅ 2 integration tests pass (survive app restart; atomic sharing across concurrent instances) |
 | Stage 4 realtime transport | ✅ `InProcessTransport` + Phase 5 real `ws` WebSocket / `node:http` SSE gateways | ✅ 70 tests incl. real TCP pub/sub, handshake, replay, heartbeat timeout, reconnect/resubscribe, backpressure, strict protocol |
-| Stage 4 jobs queue + worker | ✅ `InMemoryJobQueue` (real in-memory queue) | ✅ 24 tests incl. atomic claim, retries, dead-letter, graceful shutdown |
+| Stage 4 jobs queue + worker | ✅ `InMemoryJobQueue` + `RedisJobQueue` (real `ioredis` + Lua) + `SqlJobQueue` (SQLite/PostgreSQL) | ✅ 51 runtime + 17 security + 17 integration tests incl. atomic claim, retries, dead-letter, graceful shutdown, cross-process Lua atomicity, `FOR UPDATE SKIP LOCKED`, dedupe index, concurrent-safe schema |
 | Stage 4 local storage driver | ✅ `LocalStorageDriver` (real filesystem I/O) | ✅ 24 tests incl. persistence, path traversal, atomic writes, streaming |
 | Stage 4 mail test transport | ✅ `TestTransport` (deterministic in-memory) | ✅ 26 tests incl. retries, header injection, HTML escaping |
 | Stage 4 testing builders | ✅ real `@sveltex/core` DI/lifecycle | ✅ 32 tests; no live external service required |
@@ -131,7 +132,7 @@ Each package has `tests/types/public-api.test.ts` verifying:
 3. ~~**No reference application tests**~~ — Resolved: 18 integration tests (in-process + live Redis) cover the full assembly. The Redis suite self-skips when no server is reachable; it never substitutes a fake.
 4. **No `npm pack` + clean installation tests in CI** — Local verification done, CI not configured.
 5. **No cross-platform CI** — Current CI runs `pnpm check` only, no OS matrix.
-6. **No durable/distributed provider adapters** — Phase 5 shipped real WebSocket (`ws`) and SSE (`node:http` + `fetch`) gateways and client transports for `@sveltex/realtime`, verified on ephemeral TCP ports, but those gateways are single-process fan-out hubs. A cross-instance realtime broker (Redis pub/sub / NATS), a durable/distributed job broker, S3/object storage, and SMTP/HTTP mail adapters are still not shipped. Each README documents the process-local / single-process limitation explicitly; no untested provider is advertised.
+6. **No durable/distributed provider adapters** — Phase 5 shipped real WebSocket (`ws`) and SSE (`node:http` + `fetch`) gateways for `@sveltex/realtime` (single-process fan-out). Phase 6 shipped real `RedisJobQueue` (`ioredis` + Lua) and `SqlJobQueue` (SQLite/PostgreSQL) for `@sveltex/jobs`, verified against live Redis 7 and PostgreSQL 16. A cross-instance realtime broker (Redis pub/sub / NATS), S3/object storage, and SMTP/HTTP mail adapters are still not shipped. Each README documents limitations explicitly; no untested provider is advertised.
 7. **No published-registry consumer install test for the CLI** — generated manifests, config, hooks, and all six templates were verified (zero unrendered placeholders), but a full `install → typecheck → build` of a generated app against published `@sveltex/*` packages requires a registry publish and remains a CI task. This is explicitly not claimed as passing.
 
 ---

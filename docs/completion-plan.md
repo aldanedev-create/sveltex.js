@@ -409,35 +409,44 @@ Package: `@sveltex/jobs`
 
 Provide background job processing with development and production storage options.
 
+> **Delivered 2026-11-12 (completion-plan Phase 6).** Every task and test below is
+> implemented and verified — see the [`Phase 6 report`](./completion/phase-6-jobs.md).
+> No new package was created; `@sveltex/jobs` alone was extended with a real Redis-backed
+> queue, a real SQL-backed queue (SQLite / PostgreSQL), strict persisted serialization,
+> shared validation, registration and scheduling. Measured gate: 0 failures, 0 skipped,
+> including 17 live-service integration tests (real Redis 7, SQLite and PostgreSQL 16).
+> Not claimed: a MySQL queue adapter, Redis Cluster cross-slot routing, priority queues,
+> cron/periodic schedule persistence, TLS/auth/rate limiting, or dead-letter replay tooling.
+
 ### Tasks
 
-- [ ] Job registration.
-- [ ] Job execution.
-- [ ] Job scheduling.
-- [ ] Delayed jobs.
-- [ ] Retries.
-- [ ] Exponential backoff.
-- [ ] Job cancellation.
-- [ ] Failure handling.
-- [ ] Concurrency limits.
-- [ ] Job deduplication.
-- [ ] Idempotency.
-- [ ] Redis-backed queue.
-- [ ] Database-backed queue.
-- [ ] Graceful worker shutdown.
-- [ ] In-memory development and testing queue.
+- [x] Job registration.
+- [x] Job execution.
+- [x] Job scheduling.
+- [x] Delayed jobs.
+- [x] Retries.
+- [x] Exponential backoff.
+- [x] Job cancellation.
+- [x] Failure handling.
+- [x] Concurrency limits.
+- [x] Job deduplication.
+- [x] Idempotency.
+- [x] Redis-backed queue.
+- [x] Database-backed queue.
+- [x] Graceful worker shutdown.
+- [x] In-memory development and testing queue.
 
 ### Tests
 
-- [ ] Job execution.
-- [ ] Retry behavior.
-- [ ] Delayed execution.
-- [ ] Cancellation.
-- [ ] Failure handling.
-- [ ] Concurrency.
-- [ ] Idempotency.
-- [ ] Queue persistence.
-- [ ] Worker shutdown.
+- [x] Job execution.
+- [x] Retry behavior.
+- [x] Delayed execution.
+- [x] Cancellation.
+- [x] Failure handling.
+- [x] Concurrency.
+- [x] Idempotency.
+- [x] Queue persistence.
+- [x] Worker shutdown.
 
 ---
 

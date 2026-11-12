@@ -58,3 +58,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm test:security
+      # Real Redis / PostgreSQL integration tests for @sveltex/jobs. The service
+      # containers above are mandatory; these tests are never skipped.
+      - run: pnpm --filter @sveltex/jobs test:integration

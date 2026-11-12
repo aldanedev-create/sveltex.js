@@ -2,7 +2,7 @@
 
 SvelteX is developed in five stages. The CLI is the final stage, even though it will be the main onboarding tool developers can choose to install first. The existing Core and SvelteKit adapter are retained and improved; they are not rebuilt.
 
-> **Status (2026-11-11): all five stages are implemented and verified; completion-plan Phases 0–5 delivered.** 779 runtime tests, 131 security tests, and 16 type-test projects pass with live PostgreSQL 16 / MySQL 8.0 / Redis 7 services (0 failures, 0 skipped). See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
+> **Status (2026-11-11): all five stages are implemented and verified; completion-plan Phases 0–6 delivered.** 806 runtime tests, 141 security tests, and 16 type-test projects pass with live PostgreSQL 16 / MySQL 8.0 / Redis 7 services (0 failures, 0 skipped). See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
 
 ## Stage 1 — Foundation
 
@@ -50,7 +50,7 @@ Each package is independently installable. Provider-specific drivers should be o
 
 **Responsibilities:** realtime transports, durable job/worker contracts, object storage, email providers, and test application/fake adapter helpers.
 
-**Current state:** complete. All five packages ship real implementations behind explicit adapter contracts, with 176 runtime + 57 security tests, public-API type tests, and READMEs documenting deployment limitations. `@sveltex/realtime` now ships **real WebSocket and SSE gateways** (verified on ephemeral TCP ports) in addition to its in-process transport; a durable broker, S3, and SMTP/HTTP adapters are still not shipped or advertised.
+**Current state:** complete. All five packages ship real implementations behind explicit adapter contracts, with 203 runtime + 67 security tests, public-API type tests, and READMEs documenting deployment limitations. `@sveltex/realtime` ships **real WebSocket and SSE gateways** (verified on ephemeral TCP ports) in addition to its in-process transport; `@sveltex/jobs` ships **real Redis (`ioredis` + Lua) and SQL (SQLite/PostgreSQL) durable queues** (verified against live Redis 7 / PostgreSQL 16). S3/object-store and SMTP/HTTP adapters are still not shipped or advertised.
 
 **Exit:** provider boundaries, retries, cleanup, failure behavior, authorization, and test doubles are verified.
 

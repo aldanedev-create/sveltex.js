@@ -20,13 +20,13 @@
 | `@sveltex/session` | ✅ Pass | ✅ Pass | ✅ 104/104 | ✅ 13/13 | ✅ Pass | **Stage 3 — Complete (cookies + CSRF + SQL store + revocation + auth bridge)** |
 | `@sveltex/example-reference-app` | ✅ Pass | ✅ Pass | ✅ 18/18 | N/A | ✅ Pass | **Stage 3 — Exit criterion met** |
 | `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 70/70 | ✅ 20/20 | ✅ Pass | **Stage 4 — Complete (Phase 5: real WS/SSE gateways, strict protocol, connection lifecycle)** |
-| `@sveltex/jobs` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 7/7 | ✅ Pass | **Stage 4 — Ready (process-local)** |
+| `@sveltex/jobs` | ✅ Pass | ✅ Pass | ✅ 51/51 | ✅ 17/17 | ✅ Pass | **Stage 4 — Complete (Phase 6: real Redis + SQL queues, strict serialization, registry, scheduler)** |
 | `@sveltex/storage` | ✅ Pass | ✅ Pass | ✅ 24/24 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (local disk)** |
 | `@sveltex/mail` | ✅ Pass | ✅ Pass | ✅ 26/26 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (test transport)** |
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
 | `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **779/779** | **131/131** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **806/806** | **141/141** | **16/16** | **All pass** |
 
 ---
 
@@ -151,13 +151,16 @@ All five packages are independently installable ESM packages with strict `tsconf
 - **Tests:** 70 — 50 runtime (17 pre-existing + 33 new) + 20 security (8 pre-existing + 12 new), plus a public-API subpath type test. Real ephemeral TCP ports and real `fetch` streams; no fake transport, no skipped test.
 - **Limitations:** both gateways are single-process fan-out hubs; no persistence, cross-instance fan-out, broker, TLS termination, rate limiting or distributed lock. SSE replay is bounded and channel-filtered, not durable history. See [`Phase 5 report`](../completion/phase-5-realtime.md).
 
-#### `@sveltex/jobs` — ✅ Ready (process-local)
+#### `@sveltex/jobs` — ✅ Complete (Phase 6: real Redis + SQL durable queues)
 
-- **Source:** `src/index.ts` (contracts, `computeBackoffDelay`, `Worker`) + `src/in-memory.ts`.
-- **Public API:** `JobQueue`, `Job`, `EnqueueOptions`, `BackoffPolicy`, `computeBackoffDelay`, `Worker`, `InMemoryJobQueue` (`./in-memory`).
-- **Features:** atomic `claim`, delayed visibility, deduplication keys, dead-letter state, idempotent `complete`/`fail`; `Worker` with concurrency, capped exponential backoff, bounded retries, failure isolation, graceful `stop()`, external `AbortSignal`, and injectable clock via public `tick(now?)`.
-- **Tests:** 24 — 17 unit + 7 security.
-- **Limitations:** not durable and not distributed; no broker adapter is shipped or advertised.
+- **Source:** `src/index.ts` (contracts, `computeBackoffDelay`, `Worker`, three new typed errors), `src/in-memory.ts` (rewritten with shared validation), plus Phase 6 modules `validation.ts`, `serialization.ts`, `redis.ts`, `sql.ts`, `registry.ts`, `scheduler.ts`.
+- **Public API (core):** `JobQueue` (extended with `cancel(id)`), `Job`, `EnqueueOptions`, `BackoffPolicy`, `computeBackoffDelay`, `Worker`, `InMemoryJobQueue` (`./in-memory`), `JobsError`, `JobsValidationError`, `JobsClosedError`, `JobsSerializationError`, `JobsConfigurationError`, `JobsStoreError`.
+- **Public API (subpaths):** `/validation` — `JOB_NAME_PATTERN`, `validateEnqueueOptions`, `validateClaim`, `validateFailOptions`, `validateJobId`, `validateTableName`; `/serialization` — `JOBS_ENVELOPE_PREFIX`, `serializeJobPayload`, `deserializeJobPayload`, `encodeJobRecord`, `decodeJobRecord`, `decodeJob`; `/redis` — `RedisJobQueue`, `RedisJobQueueOptions`; `/sql` — `SqlJobQueue`, `JobSqlExecutor`, `JobSqlQueryExecutor`, `JobSqlDialect`, `JobSqlValue`; `/registry` — `JobRegistry`; `/scheduler` — `JobScheduler`, `computeDelayMs`.
+- **Features:** atomic `claim`, delayed visibility, deduplication keys, dead-letter state, idempotent `complete`/`fail`/`cancel`; `Worker` with concurrency, capped exponential backoff, bounded retries, failure isolation, graceful `stop()`, external `AbortSignal`, and injectable clock. Phase 6 adds: `RedisJobQueue` (real `ioredis`, four Lua scripts for atomic cross-process enqueue/claim/finalize/cancel, ZSET ready queue, SET of all ids, per-id records, dedupe mapping); `SqlJobQueue` (BYO `JobSqlExecutor`, SQLite/PostgreSQL dialects, `$n` placeholder rendering, transaction-based `FOR UPDATE SKIP LOCKED` claim, partial unique dedupe index, concurrent-safe schema creation); strict `sveltex-jobs:v1:` payload/record serialization (rejects unsafe values, `__proto__` keys, corrupt/legacy/tampered records); `JobRegistry` (typed `SX_JOBS_UNREGISTERED`); `JobScheduler` (`enqueue`/`scheduleAt`/`scheduleIn`); shared validation; typed errors.
+- **Adapters:** `RedisJobQueue` uses `ioredis` against live Redis 7; `SqlJobQueue` uses `@sveltex/database`'s `Database` (satisfies `JobSqlExecutor`) against real SQLite (`node:sqlite`) and PostgreSQL 16.
+- **Tests:** 51 runtime + 17 security + 17 integration (Redis 7 + SQLite + PostgreSQL 16). New: `serialization.test.mjs` (8), `registry.test.mjs` (5), `scheduler.test.mjs` (4), `security/phase6-security.test.mjs` (10), `integration/redis.test.mjs` (7), `integration/sql.test.mjs` (10), `types/public-api.test.ts` (extended). 0 failures, 0 skipped.
+- **Missing (explicit, not advertised):** MySQL SQL dialect, distributed lock, cron/recurring schedules, workflow DAGs, SvelteKit `handle` wiring (Phase 10).
+- **Limitation:** cross-process dedupe beyond the queue's own dedupe key is not claimed; package version stays `0.1.0` (bump deferred to Phase 11).
 
 #### `@sveltex/storage` — ✅ Ready (local disk)
 

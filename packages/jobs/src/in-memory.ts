@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { JobsClosedError, JobsValidationError } from './index.js';
+import { JobsClosedError } from './index.js';
 import type { EnqueueOptions, EnqueueResult, FailOptions, Job, JobQueue } from './index.js';
+import { validateClaim, validateEnqueueOptions, validateFailOptions, validateJobId } from './validation.js';
 
 interface MutableJob {
   id: string;
@@ -38,8 +39,8 @@ export interface InMemoryJobQueueOptions {
 /**
  * A real, working process-local queue. It provides atomic claim, bounded-attempt retries with
  * delayed visibility, deduplication, and a dead-letter state. It is NOT durable and NOT a
- * distributed queue: state lives in this process only. Use a database/broker-backed JobQueue
- * implementation for multi-instance deployments.
+ * distributed queue: state lives in this process only. Use `RedisJobQueue` or `SqlJobQueue`
+ * for multi-instance deployments.
  */
 export class InMemoryJobQueue implements JobQueue {
   readonly #jobs = new Map<string, MutableJob>();
@@ -58,8 +59,8 @@ export class InMemoryJobQueue implements JobQueue {
 
   async enqueue<TPayload>(options: EnqueueOptions<TPayload>, now: number = this.#now()): Promise<EnqueueResult> {
     this.#assertOpen();
-    validateEnqueue(options, now);
-    const key = options.dedupeKey;
+    const validated = validateEnqueueOptions(options, now);
+    const key = validated.dedupeKey;
     if (key !== undefined) {
       const existingId = this.#dedupe.get(key);
       if (existingId !== undefined) {
@@ -73,13 +74,13 @@ export class InMemoryJobQueue implements JobQueue {
     }
     const job: MutableJob = {
       id: this.#generateId(),
-      name: options.name,
-      payload: options.payload,
+      name: validated.name,
+      payload: validated.payload,
       status: 'pending',
       attempts: 0,
-      maxAttempts: options.maxAttempts ?? 3,
+      maxAttempts: validated.maxAttempts,
       createdAt: now,
-      availableAt: now + (options.delayMs ?? 0),
+      availableAt: now + validated.delayMs,
       dedupeKey: key,
       lastError: undefined,
     };
@@ -90,7 +91,7 @@ export class InMemoryJobQueue implements JobQueue {
 
   async claim(now: number, limit: number): Promise<readonly Job[]> {
     this.#assertOpen();
-    if (!Number.isSafeInteger(limit) || limit < 0) throw new JobsValidationError('claim limit must be a non-negative integer.');
+    validateClaim(now, limit);
     if (limit === 0) return Object.freeze([]);
     const claimed: Job[] = [];
     for (const job of this.#jobs.values()) {
@@ -105,6 +106,7 @@ export class InMemoryJobQueue implements JobQueue {
 
   async complete(id: string): Promise<void> {
     if (this.#closed) return;
+    validateJobId(id);
     const job = this.#jobs.get(id);
     if (!job || job.status !== 'active') return;
     job.status = 'completed';
@@ -113,12 +115,14 @@ export class InMemoryJobQueue implements JobQueue {
 
   async fail(id: string, options: FailOptions): Promise<void> {
     if (this.#closed) return;
+    validateJobId(id);
+    const validated = validateFailOptions(options);
     const job = this.#jobs.get(id);
     if (!job || job.status !== 'active') return;
-    job.lastError = options.error;
-    if (options.retryAt !== undefined) {
+    job.lastError = validated.error;
+    if (validated.retryAt !== undefined) {
       job.status = 'pending';
-      job.availableAt = options.retryAt;
+      job.availableAt = validated.retryAt;
     } else {
       job.status = 'dead';
       if (job.dedupeKey !== undefined && this.#dedupe.get(job.dedupeKey) === id) this.#dedupe.delete(job.dedupeKey);
@@ -126,6 +130,7 @@ export class InMemoryJobQueue implements JobQueue {
   }
 
   async get(id: string): Promise<Job | undefined> {
+    validateJobId(id);
     const job = this.#jobs.get(id);
     return job ? snapshot(job) : undefined;
   }
@@ -137,6 +142,7 @@ export class InMemoryJobQueue implements JobQueue {
   /** Cancel a queued job (idempotent). Returns true when a pending job was cancelled. */
   async cancel(id: string): Promise<boolean> {
     if (this.#closed) return false;
+    validateJobId(id);
     const job = this.#jobs.get(id);
     if (!job || job.status !== 'pending') return false;
     job.status = 'cancelled';
@@ -152,21 +158,4 @@ export class InMemoryJobQueue implements JobQueue {
   #assertOpen(): void {
     if (this.#closed) throw new JobsClosedError('The job queue is closed.');
   }
-}
-
-function validateEnqueue(options: EnqueueOptions<unknown>, now: number): void {
-  if (!options || typeof options !== 'object') throw new JobsValidationError('Enqueue options are required.');
-  if (typeof options.name !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(options.name)) {
-    throw new JobsValidationError('Job name must match ^[A-Za-z0-9._:-]{1,128}$.');
-  }
-  if (options.maxAttempts !== undefined && (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 1 || options.maxAttempts > 100)) {
-    throw new JobsValidationError('maxAttempts must be an integer between 1 and 100.');
-  }
-  if (options.delayMs !== undefined && (!Number.isFinite(options.delayMs) || options.delayMs < 0)) {
-    throw new JobsValidationError('delayMs must be a non-negative finite number.');
-  }
-  if (options.dedupeKey !== undefined && (typeof options.dedupeKey !== 'string' || options.dedupeKey.length === 0 || options.dedupeKey.length > 256)) {
-    throw new JobsValidationError('dedupeKey must be a non-empty string of at most 256 characters.');
-  }
-  if (!Number.isFinite(now)) throw new JobsValidationError('now must be a finite timestamp.');
 }

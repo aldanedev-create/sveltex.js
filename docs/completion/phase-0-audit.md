@@ -21,7 +21,7 @@ added). Runtime tests are counted from real `pnpm -r test`, `pnpm check` = **488
 snapshot** (a historical baseline retained for audit traceability); after Phase 1 the measured
 totals were **536/536 runtime / 86/86 security**, after Phase 2 **565/565 / 93/93**, and after
 Phase 3 **637/637 runtime / 105/105 security**, after Phase 4 **734/734 runtime / 119/119 security**, and after Phase 5 (current)
-**779/779 runtime / 131/131 security** — see the [Phase 5 report](./phase-5-realtime.md).
+**806/806 runtime / 141/141 security** — see the [Phase 6 report](./phase-6-jobs.md).
 
 | Package | src files | src lines | runtime tests | subpath exports | engines |
 |---|---:|---:|---:|---|---|
@@ -169,13 +169,25 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 > **Phase 5 outcome (2026-11-11):** see the [Phase 5 report](./phase-5-realtime.md). All former
 > gaps are closed with real implementations, real tests, security findings SEC-047 – SEC-052,
 > and four new subpath exports. No new package was created. Runtime 25 → 70,
-> security 8 → 20; monorepo 734 → 779 runtime / 119 → 131 security.
+> security 8 → 20; monorepo 734 → 779 → 806 runtime / 119 → 131 → 141 security.
 
-### Phase 6 — `@sveltex/jobs`
+### Phase 6 — `@sveltex/jobs` (completed 2026-11-12)
 | Requirement | State | Reality |
 |---|:---:|---|
-| Queue, retries, exponential backoff, dedup, concurrency, worker shutdown | ✅ | in-memory queue |
-| **Redis-backed queue, DB-backed queue, persistence** | ✗ | README: "no broker/provider adapter" |
+| Queue, retries, exponential backoff, dedup, concurrency, worker shutdown | ✅ | `InMemoryJobQueue` rewritten on shared validation (existing runtime/security semantics preserved) + `Worker` |
+| Job registration / execution | ✅ | `JobRegistry` with typed `SX_JOBS_UNREGISTERED` dispatch into the worker's retry / dead-letter path |
+| Job scheduling / delayed jobs | ✅ | Clock-injectable `JobScheduler` (`scheduleAt` / `scheduleIn`) plus ready-ZSET / `available_at` delayed visibility on both durable backends |
+| Job cancellation / failure handling / idempotency | ✅ | `JobQueue.cancel()` on all three backends; idempotent `complete` / `fail` / `cancel`; dead-letter retains `lastError` |
+| **Redis-backed queue** | ✅ | Real `ioredis` + four Lua scripts (atomic enqueue / claim / finalize / cancel); two independent clients verified never to double-claim |
+| **Database-backed queue / persistence** | ✅ | Real `SqlJobQueue` (SQLite via `node:sqlite`, PostgreSQL via `pg.Pool`) with transactional claim, `FOR UPDATE SKIP LOCKED`, a partial unique dedupe index and `schemaStatements()` migrations; file-backed SQLite survives a full reopen |
+| Strict payload serialization | ✅ | Versioned `sveltex-jobs:v1:` envelope, 64/128 KiB bounds, rejection of silently-coerced values and prototype-pollution keys, full record validation on decode |
+| Real integration, no fakes | ✅ | Live Redis 7, SQLite and PostgreSQL 16 via `@sveltex/database`; 17 integration tests (7 Redis + 10 SQL) plus 51 runtime/security tests and one type-test project; CI runs them, 0 skipped |
+
+> **Phase 6 outcome (2026-11-12):** see the [Phase 6 report](./phase-6-jobs.md). All former
+> gaps are closed with real implementations, real live-service tests, security findings
+> SEC-053 – SEC-062, and six new subpath exports. No new package was created. The jobs package
+> grew from 24 to 51 runtime/security tests; measured monorepo totals are recorded in the
+> Phase 6 report. The former README claim "no broker/provider adapter" is retired.
 
 ### Phase 7 — `@sveltex/storage`
 | Requirement | State | Reality |
@@ -257,19 +269,19 @@ real template capability demos), not as a from-scratch build.
 | Criterion | Now |
 |---|:---:|
 | All packages audited | ✅ this document |
-| Required functionality implemented | ◐ (Phases 0–5 done; 6–12 pending) |
+| Required functionality implemented | ◐ (Phases 0–6 done; 7–12 pending) |
 | Database supports built-in ORM integrations + custom adapters | ✅ Phase 1 done (Drizzle/Kysely + BYO) |
 | Public APIs / TypeScript types stable | ✅ (current surface) |
-| Unit/integration/security/type tests pass | ✅ 779 / 131 / 16 (Phase 5) |
+| Unit/integration/security/type tests pass | ✅ 806 / 141 / 16 (Phase 6) |
 | Packages build and install independently | ◐ (frozen install works; clean consumer install not verified) |
 | Cross-package scenarios work | ✗ (2 of 13) |
-| Documentation matches implementation | ✅ (Phase 5 doc sync complete) |
+| Documentation matches implementation | ✅ (Phase 6 doc sync complete) |
 | Generated apps build and run | ◐ (in-monorepo only) |
 | Production-readiness checks pass | ✗ |
 
 **Bottom line:** the repository is clean, honest, and fully tested for what it currently
-promises. Completion-plan Phases 0–5 (audit, database ORM integrations, auth, sessions, cache,
-realtime) are delivered with real implementations, real integration tests and synced documentation;
-the measured gate is 779/779 runtime, 131/131 security, 16/16 type-test projects. Phases 6–12
-(jobs, storage, mail, validation/testing, cross-package integration,
-production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 6.
+promises. Completion-plan Phases 0–6 (audit, database ORM integrations, auth, sessions, cache,
+realtime, jobs) are delivered with real implementations, real integration tests and synced documentation;
+the measured gate is 806/806 runtime, 141/141 security, 16/16 type-test projects. Phases 7–12
+(storage, mail, validation/testing, cross-package integration,
+production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 7.

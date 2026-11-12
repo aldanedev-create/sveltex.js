@@ -26,7 +26,7 @@
 | SEC-015 | Info | Distributed session atomicity | `RedisSessionStore` implements `createIfAbsent`, `compareAndSet`, and `rotate` as server-side **Lua scripts** (`EVAL`), so the read-validate-write sequence is atomic across processes. This closes the TOCTOU window that a naive GET-then-SET store would expose (session resurrection / lost concurrent updates / rotation collisions). All values are JSON-serialized with no command interpolation; `clear()` is `SCAN`+`DEL` scoped to `keyPrefix` (never `FLUSHDB`); corrupt or logically expired records are purged on read; returned data is deeply cloned and frozen. | **Secure** |
 | SEC-016 | Info | Reference-app authorization boundary | `examples/reference-app` rejects client-supplied `roles` on registration (self-privilege-escalation); `admin` is granted only via trusted `adminEmails` bootstrap config. Every privileged call resolves the principal from a live session **plus a fresh `users` row** — never a cached or client-supplied role. `createPost` derives `authorId` from the session (payload `authorId` ignored); all SQL is parameterized; `grantRole` uses an allow-list and invalidates the cached profile; `rotateSession` is atomic; session IDs are validated before use. Covered by 18 integration tests. | **Secure** |
 | SEC-017 | Info | Realtime authorization boundary | `RealtimeHub` requires an explicit `authorize` hook (no implicit allow) and evaluates `deliver` **per subscriber**; delivered payloads are deep-frozen; channel names reject traversal/control characters; at-least-once redelivery is de-duplicated by a bounded **per-subscriber** id cache (an initial global-set design was corrected). 8 pre-existing security tests; Phase 5 adds 12 (SEC-047 – SEC-052). | **Secure** |
-| SEC-018 | Info | Job queue atomicity and shutdown | `InMemoryJobQueue.claim()` is atomic so at-least-once redelivery cannot double-execute a side effect; `Worker.stop()` drains in-flight handlers while rejecting new work synchronously; retries/backoff are capped and permanent failures dead-letter instead of looping. 7 security tests. | **Secure** |
+| SEC-018 | Info | Job queue atomicity and shutdown | `InMemoryJobQueue.claim()` is atomic so at-least-once redelivery cannot double-execute a side effect; `Worker.stop()` drains in-flight handlers while rejecting new work synchronously; retries/backoff are capped and permanent failures dead-letter instead of looping. Phase 6 extends this to `RedisJobQueue` (four Lua scripts for atomic cross-process enqueue/claim/finalize/cancel) and `SqlJobQueue` (transaction-based `FOR UPDATE SKIP LOCKED` claim, partial unique dedupe index, concurrent-safe schema creation). Strict `sveltex-jobs:v1:` serialization rejects corrupt/legacy/tampered records. 7 pre-existing + 10 Phase 6 security tests (SEC-053 – SEC-062). | **Secure** |
 | SEC-019 | Info | Storage path traversal and atomicity | User keys reject absolute paths, backslashes, `.`/`..` segments, and control characters, then map to **SHA-256 hex filenames** (user paths never reach the filesystem). Writes are atomic (temp + `rename`, metadata sidecar last); a symlinked `objects/` directory is rejected; reads verify etag/size. 9 security tests. | **Secure** |
 | SEC-020 | Info | Mail header injection and XSS | CRLF/NUL injection is rejected in subjects, names, and headers; `renderTemplate` HTML-escapes interpolated values by default; bounded retries are deterministic and a permanent failure throws `MailSendError` with `attempts` + `cause` — never a false success. `TestTransport` never contacts an external service. 9 security tests. | **Secure** |
 | SEC-021 | Info | Testing helpers do not bypass real core | `@sveltex/testing` delegates to the real `@sveltex/core` DI/lifecycle, so config validation, request-scope enforcement, and lifecycle hook failures are surfaced rather than bypassed. `withTestApplication` guarantees cleanup even on a thrown body; forgotten request scopes are disposed; fakes expose frozen defensive snapshots and reject use after `close()`. 12 security tests. | **Secure** |
@@ -328,6 +328,48 @@ backend.
   fan-out, broker, TLS termination, rate limiting or distributed lock. `allowAnonymous()` is a
   development opt-in. These are recorded in the [Phase 5 report](../completion/phase-5-realtime.md),
   not hidden.
+
+### Completion-plan Phase 6 — jobs security review (SEC-053 – SEC-062)
+
+**Status: Secure (with documented limitations)**
+
+The dedicated suite is `packages/jobs/tests/security/phase6-security.test.mjs` (10 cases; with the
+pre-existing suite the package ships 17 security tests). The integration suites
+(`tests/integration/redis.test.mjs`, `tests/integration/sql.test.mjs`) exercise a real Redis 7
+server (four Lua scripts), real SQLite (`node:sqlite`) and a real PostgreSQL 16 server
+(`pg.Pool`, `FOR UPDATE SKIP LOCKED`) — two independent clients are verified never to
+double-claim the same job, and a file-backed SQLite queue survives a full reopen. No fake
+provider, no substituted backend, **0 skipped**.
+
+- **Prototype-pollution boundary (SEC-053).** `serializeJobPayload` strips `__proto__`,
+  `constructor` and `prototype` keys on encode and the JSON reviver removes them on decode;
+  `Object.prototype` is never mutated, and polluted keys are rejected rather than silently
+  dropped into a persisted record.
+- **Persisted-record boundary (SEC-054).** `decodeJobRecord` validates the versioned
+  `sveltex-jobs:v1:` envelope, record version, status enum, id/name grammar, `attempts`, and
+  timestamps **and** re-parses the nested payload as a strict envelope. Corrupt JSON, legacy
+  `v: 2`, tampered `status`/`attempts`, non-string ids and plaintext payloads are rejected with
+  `JobsSerializationError` — never coerced into a runnable job.
+- **Identifier / injection boundary (SEC-055, SEC-056).** `tableName`, job ids and dedupe keys
+  are validated against strict grammars and length bounds before they reach a SQL statement or a
+  Redis key; all values are bound as parameters (`?` / `$n`), so user payload text never appears
+  in statement text. The SQL suite asserts parameterization directly.
+- **Configuration boundary (SEC-057).** Redis `keyPrefix`, SQL dialect and the BYO executor are
+  validated before any client or connection is created, so a hostile config fails closed with
+  `JobsConfigurationError` rather than reaching a live backend.
+- **Lifecycle boundary (SEC-058, SEC-059).** A closed queue rejects every operation
+  (`JobsClosedError`), and `complete` / `fail` / `cancel` are idempotent: a dead-lettered or
+  finalized job cannot be resurrected by a late or duplicated worker.
+- **Dispatch boundary (SEC-060).** `JobRegistry.createHandler()` throws a typed
+  `SX_JOBS_UNREGISTERED` error for unknown names, so the `Worker` retry/dead-letter path applies
+  instead of silently dropping the job or invoking a default handler.
+- **Resource / diagnostics boundary (SEC-061, SEC-062).** Oversized payloads (64 KiB) and
+  invalid fail options are rejected before any I/O; `JobsStoreError` preserves the `operation`
+  and driver `cause` for safe operator diagnostics while the public error remains non-leaking.
+- **Not claimed.** MySQL is not implemented for `SqlJobQueue` (only `sqlite` / `postgres`); no
+  Redis Cluster cross-slot routing, priority queues, cron/periodic schedule persistence, worker
+  leader election, TLS/auth/rate limiting, or dead-letter replay tooling. These are recorded in
+  the [Phase 6 report](../completion/phase-6-jobs.md), not hidden.
 
 ## Recommendations
 

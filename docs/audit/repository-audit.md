@@ -11,7 +11,7 @@
 
 SvelteX is a modular SvelteKit-native application framework with a DI container, module system, lifecycle management, and progressively built backend packages. The repository has a **solid architectural foundation** in `@sveltex/core` and `@sveltex/sveltekit`, with initial implementations for all Stage 3 packages.
 
-However, the repository had a **P0 blocking defect** that prevented `pnpm install` from succeeding, plus fixture build/typecheck failures. These have been **fixed in this audit session**. The codebase is now in a **buildable and testable state**: **all five stages are implemented and verified** with 779 runtime tests, 131 security tests, and 16 type-test projects passing under `pnpm check` (measured after completion-plan Phase 5; the Phase 3 baseline was 637/105 and this document's original audit baseline was 536/86), with the SvelteKit fixture building successfully. The Stage 5 `sveltex` CLI was built strictly **last**, after the Stage 1–4 package APIs and templates were stable and verified.
+However, the repository had a **P0 blocking defect** that prevented `pnpm install` from succeeding, plus fixture build/typecheck failures. These have been **fixed in this audit session**. The codebase is now in a **buildable and testable state**: **all five stages are implemented and verified** with 806 runtime tests, 141 security tests, and 16 type-test projects passing under `pnpm check` (measured after completion-plan Phase 6; the Phase 3 baseline was 637/105 and this document's original audit baseline was 536/86), with the SvelteKit fixture building successfully. The Stage 5 `sveltex` CLI was built strictly **last**, after the Stage 1–4 package APIs and templates were stable and verified.
 
 ### Critical findings (fixed)
 
@@ -53,7 +53,7 @@ sveltex/
 │   ├── cache/         # Stage 3 — index/redis + Phase 4 envelope/namespace/invalidation/tags/fallback/stampede, 121 tests
 │   ├── session/       # Stage 3 — index/redis/cookie/csrf/database/auth.ts, 104 tests
 │   ├── realtime/      # Stage 4 — typed channels + InProcessTransport + Phase 5 WS/SSE gateways, 70 tests
-│   ├── jobs/          # Stage 4 — InMemoryJobQueue + Worker, 24 tests
+│   ├── jobs/          # Stage 4 — queue + Worker + Phase 6 Redis/SQL durable queues, 51 tests
 │   ├── storage/       # Stage 4 — LocalStorageDriver (real fs I/O), 24 tests
 │   ├── mail/          # Stage 4 — Mailer + TestTransport, 26 tests
 │   ├── testing/       # Stage 4 — builders over real core DI, 32 tests
@@ -68,7 +68,7 @@ sveltex/
 ```
 
 **Package count:** 15 implemented packages + 1 SvelteKit fixture app + 1 reference application.  
-**Runtime tests:** 779 passing (Stage 1–3 + reference app: 546; Stage 4: 176; Stage 5 CLI: 57), 131 security tests, 16 type-test projects — measured after completion-plan Phase 5 with live PostgreSQL/MySQL/Redis services.  
+**Runtime tests:** 806 passing (Stage 1–3 + reference app: 546; Stage 4: 203; Stage 5 CLI: 57), 141 security tests, 16 type-test projects — measured after completion-plan Phase 6 with live PostgreSQL/MySQL/Redis services.  
 **Stage 4 packages** (realtime, jobs, storage, mail, testing): **delivered**. **Stage 5** (`sveltex` CLI): **delivered, built last** — 17 commands, six official templates, 57 tests, `npm pack --dry-run` verified.
 
 ---
@@ -189,7 +189,7 @@ Comprehensive across all packages:
 | `@sveltex/session` | Yes | Yes (104) | ✅ Redis/Lua (20) + SQLite/PG/MySQL `DatabaseSessionStore` | **Complete (Phase 3)** | SvelteKit `handle` wiring (Phase 10) |
 | `@sveltex/example-reference-app` | Yes | Yes (18) | ✅ Memory + live Redis | **Stage 3 exit met** | Private verification app, not published |
 | `@sveltex/realtime` | Yes | Yes (70) | ✅ Real `ws` WebSocket + `node:http`/`fetch` SSE gateways on ephemeral TCP ports, plus `InProcessTransport` | **Complete (Phase 5)** | 20 security tests; single-process fan-out, no broker/persistence |
-| `@sveltex/jobs` | Yes | Yes (24) | ✅ `InMemoryJobQueue` (process-local) | **Stage 4 — ready** | 7 security tests; not durable/distributed |
+| `@sveltex/jobs` | Yes | Yes (51) | ✅ `InMemoryJobQueue` + `RedisJobQueue` (`ioredis` + Lua) + `SqlJobQueue` (SQLite/PostgreSQL) | **Stage 4 — Complete (Phase 6)** | 17 security + 17 integration tests (real Redis 7 / PostgreSQL 16); durable and cross-process |
 | `@sveltex/storage` | Yes | Yes (24) | ✅ `LocalStorageDriver` (real fs I/O) | **Stage 4 — ready** | 9 security tests; local disk only |
 | `@sveltex/mail` | Yes | Yes (26) | ✅ `TestTransport` (deterministic in-memory) | **Stage 4 — ready** | 9 security tests; no SMTP/HTTP adapter |
 | `@sveltex/testing` | Yes | Yes (32) | ✅ real `@sveltex/core` DI/lifecycle | **Stage 4 — ready** | 12 security tests; dev dependency only |
@@ -204,5 +204,5 @@ Comprehensive across all packages:
 3. **Stage 1 finalization**: Add CHANGELOG.md to shared/config if missing. Verify `npm pack` produces correct file lists.
 4. **Stage 2 finalization**: CI verification of fixture build with installed workspace dependencies (now passing locally).
 5. **✅ Stage 3 enhancement (done in sessions 2–4)**: real `SqliteAdapter` (`node:sqlite`), `Argon2Hasher` (`@node-rs/argon2`), `RedisCache` and `RedisSessionStore` (`ioredis` + Lua), each with real integration tests; plus `examples/reference-app/` wiring all five packages (18 integration tests). PostgreSQL/MySQL, migrations and pooling were delivered in the database production-hardening pass (Session 7); built-in ORM integrations (Drizzle/Kysely) and BYO ORM were delivered in the completion plan's Phase 1 (Session 8); cookie transport and CSRF were delivered in the completion plan's Phase 3 (Session 10); strict serialization, namespaces, tag/prefix/predicate invalidation, graceful fallback and stampede protection were delivered in the completion plan's Phase 4 (Session 11); real WebSocket/SSE gateways, a strict wire protocol and connection lifecycle were delivered in Phase 5 (Session 12).
-6. **✅ Stage 4 (done, session 5; extended in Phase 5):** `realtime`, `jobs`, `storage`, `mail`, `testing` — all five delivered with real process-local implementations, 176 runtime + 57 security tests after Phase 5, type tests, READMEs documenting deployment limits, and no untested provider claims. `@sveltex/realtime` additionally ships real WebSocket/SSE gateways.
+6. **✅ Stage 4 (done, session 5; extended in Phases 5–6):** `realtime`, `jobs`, `storage`, `mail`, `testing` — all five delivered, 203 runtime + 67 security tests after Phase 6, type tests, READMEs documenting deployment limits, and no untested provider claims. `@sveltex/realtime` ships real WebSocket/SSE gateways; `@sveltex/jobs` ships real Redis (`ioredis` + Lua) and SQL (SQLite/PostgreSQL) durable queues verified against live services. Storage, mail and testing remain process-local by design.
 7. **✅ Stage 5 (done, session 6):** the `sveltex` CLI — built strictly last, after all package APIs and templates were stable and verified. 17 commands, six official templates, 57 tests, documented safety model and limitations.

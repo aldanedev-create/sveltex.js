@@ -44,6 +44,8 @@ export interface JobQueue {
   complete(id: string): Promise<void>;
   /** Idempotent: an `active` job is either re-queued for retry (retryAt) or moved to dead-letter. */
   fail(id: string, options: FailOptions): Promise<void>;
+  /** Cancel a `pending` job. Idempotent: returns true only when a pending job was cancelled. */
+  cancel(id: string): Promise<boolean>;
   get(id: string): Promise<Job | undefined>;
   list(): Promise<readonly Job[]>;
   close(): Promise<void>;
@@ -95,6 +97,27 @@ export class JobsClosedError extends JobsError {
   constructor(message: string, options: JobsErrorOptions = {}) {
     super('SX_JOBS_CLOSED', message, options);
     this.name = 'JobsClosedError';
+  }
+}
+export class JobsSerializationError extends JobsError {
+  constructor(message: string, options: JobsErrorOptions = {}) {
+    super('SX_JOBS_SERIALIZATION', message, options);
+    this.name = 'JobsSerializationError';
+  }
+}
+export class JobsConfigurationError extends JobsError {
+  constructor(message: string, options: JobsErrorOptions = {}) {
+    super('SX_JOBS_CONFIGURATION', message, options);
+    this.name = 'JobsConfigurationError';
+  }
+}
+/** A backend operation failed. `operation` identifies the failing step; `cause` keeps the driver error. */
+export class JobsStoreError extends JobsError {
+  readonly operation: string;
+  constructor(message: string, operation: string, options: JobsErrorOptions = {}) {
+    super('SX_JOBS_STORE', message, options);
+    this.name = 'JobsStoreError';
+    this.operation = operation;
   }
 }
 
