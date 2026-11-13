@@ -156,6 +156,34 @@ test('integration registry matches the real workspace package versions and names
   assert.equal(checked, 14);
 });
 
+test('integration registry advertises only real package subpath exports (no fake providers)', async () => {
+  // Each advertised adapter must resolve to a real entry in that package's
+  // `exports` map. This keeps CLI hints honest as packages gain new adapters.
+  for (const entry of INTEGRATIONS) {
+    const directory = entry.packageName.replace(/^@sveltex\//, '');
+    let manifest;
+    try {
+      manifest = JSON.parse(await readFile(join(SVELTEX_ROOT, 'packages', directory, 'package.json'), 'utf8'));
+    } catch {
+      assert.fail(`${entry.packageName}: manifest missing under packages/${directory}`);
+    }
+    assert.ok(manifest.exports && typeof manifest.exports === 'object', `${entry.packageName}: no exports map`);
+    for (const adapter of entry.adapters) {
+      assert.ok(adapter.startsWith(`${entry.packageName}/`), `${adapter} must be a subpath of ${entry.packageName}`);
+      const subpath = `.${adapter.slice(entry.packageName.length)}`;
+      assert.ok(Object.hasOwn(manifest.exports, subpath), `${entry.packageName} does not export ${subpath}`);
+    }
+  }
+  // Phase 8: real SMTP/HTTP/MIME/auth adapters must be advertised, not denied.
+  for (const name of ['test-transport', 'smtp', 'http', 'mime', 'auth']) {
+    assert.equal(getIntegration('mail').adapters.includes(`@sveltex/mail/${name}`), true, name);
+  }
+  assert.equal(getIntegration('storage').adapters.includes('@sveltex/storage/s3'), true);
+  assert.equal(getIntegration('realtime').adapters.includes('@sveltex/realtime/websocket'), true);
+  assert.equal(getIntegration('jobs').adapters.includes('@sveltex/jobs/redis'), true);
+  assert.ok(!getIntegration('mail').configHint.includes('No SMTP/HTTP provider is shipped'));
+});
+
 test('six templates are distinct, complete and only reference shipped integrations', () => {
   assert.equal(TEMPLATES.length, 6);
   assert.equal(TEMPLATE_IDS.length, 6);

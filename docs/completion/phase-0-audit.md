@@ -21,8 +21,8 @@ added). Runtime tests are counted from real `pnpm -r test`, `pnpm check` = **488
 snapshot** (a historical baseline retained for audit traceability); after Phase 1 the measured
 totals were **536/536 runtime / 86/86 security**, after Phase 2 **565/565 / 93/93**, and after
 Phase 3 **637/637 runtime / 105/105 security**, after Phase 4 **734/734 runtime / 119/119 security**, after Phase 5 **779/779 runtime / 131/131 security**, after Phase 6
-**806/806 runtime / 141/141 security**, and after Phase 7 (current)
-**826/826 runtime / 150/150 security** — see the [Phase 7 report](./phase-7-storage.md).
+**806/806 runtime / 141/141 security**, after Phase 7 **826/826 runtime / 150/150 security**, and after Phase 8 (current)
+**871/871 runtime / 160/160 security** — see the [Phase 8 report](./phase-8-mail.md).
 
 | Package | src files | src lines | runtime tests | subpath exports | engines |
 |---|---:|---:|---:|---|---|
@@ -205,11 +205,24 @@ replacement for Drizzle Kit / Prisma Migrate / etc.
 See the [`Phase 7 report`](./phase-7-storage.md) for architecture, measured gates and honest
 "Not claimed" limitations.
 
-### Phase 8 — `@sveltex/mail`
+### Phase 8 — `@sveltex/mail` — ✅ delivered (2026-11-12)
+
 | Requirement | State | Reality |
 |---|:---:|---|
-| Message contract, HTML/text, templates, retries, test transport | ✅ | `./test-transport` |
-| **SMTP integration, attachments, provider adapter** | ✗ | README: "no SMTP/HTTP provider" |
+| Message contract, HTML/text, templates, retries, test transport | ✅ | `./index`, `./test-transport`; unchanged and still covered |
+| SMTP integration | ✅ | `./smtp` — real nodemailer client, AUTH/STARTTLS/implicit TLS, `verify()`, delivery metadata |
+| Provider adapter interface | ✅ | `./http` — real `fetch` adapter with strict `application/vnd.sveltex.mail.v1+json` envelope |
+| Attachments | ✅ | `MailAttachment` + `validateAttachment` / `attachmentBytes`, count and byte caps, frozen byte copies |
+| Delivery metadata | ✅ | `MailDeliveryInfo` on `TransportReceipt.delivery` (accepted/rejected/response/backend) |
+| Error handling | ✅ | `MailConfigurationError` added; credentials never leak into messages/details |
+| Authentication workflow integration | ✅ | `./auth` — password-reset / email-verification senders structurally compatible with `@sveltex/auth` ports |
+| MIME serialization | ✅ | `./mime` — real RFC 5322/2045 serializer, CRLF-only, RFC 2047/2231, multipart, BCC envelope-only |
+| Test transport | ✅ | `./test-transport` retained for deterministic tests; never advertised as a provider |
+
+**Verification:** 70 runtime/security unit tests, 24 real integration tests (real SMTP server with
+AUTH/STARTTLS/TLS/attachments/MIME parsing, real HTTP server, real `@sveltex/auth` workflows),
+public-API type tests, 0 skipped. Security review SEC-072 – SEC-081. See
+[`phase-8-mail.md`](phase-8-mail.md).
 
 ### Phase 9 — `@sveltex/validation` / `@sveltex/testing`
 | Requirement | State | Reality |
@@ -236,7 +249,7 @@ See the [`Phase 7 report`](./phase-7-storage.md) for architecture, measured gate
 ### Phase 12 — CLI / blueprint ecosystem
 | Requirement | State | Reality |
 |---|:---:|---|
-| 17 commands, 6 templates, ChangeSet preview/rollback, JSON, exit codes, secret redaction | ✅ | Stage 5, 57/57 tests |
+| 17 commands, 6 templates, ChangeSet preview/rollback, JSON, exit codes, secret redaction | ✅ | Stage 5, 58/58 tests (Phase 8 registry consistency) |
 | Blueprint engine (multi-file, hooks, versioning, conflict detection) | ◐ | generator framework exists, no blueprint abstraction |
 | Expanded generators, template real-capability demos, consumer-side build/run | ✗ | templates are static scaffolds |
 
@@ -279,19 +292,19 @@ real template capability demos), not as a from-scratch build.
 | Criterion | Now |
 |---|:---:|
 | All packages audited | ✅ this document |
-| Required functionality implemented | ◐ (Phases 0–7 done; 8–12 pending) |
+| Required functionality implemented | ◐ (Phases 0–8 done; 9–12 pending) |
 | Database supports built-in ORM integrations + custom adapters | ✅ Phase 1 done (Drizzle/Kysely + BYO) |
 | Public APIs / TypeScript types stable | ✅ (current surface) |
-| Unit/integration/security/type tests pass | ✅ 826 / 150 / 16 (Phase 7) |
+| Unit/integration/security/type tests pass | ✅ 871 / 160 / 16 (Phase 8) |
 | Packages build and install independently | ◐ (frozen install works; clean consumer install not verified) |
 | Cross-package scenarios work | ✗ (2 of 13) |
-| Documentation matches implementation | ✅ (Phase 7 doc sync complete) |
+| Documentation matches implementation | ✅ (Phase 8 doc sync complete) |
 | Generated apps build and run | ◐ (in-monorepo only) |
 | Production-readiness checks pass | ✗ |
 
 **Bottom line:** the repository is clean, honest, and fully tested for what it currently
-promises. Completion-plan Phases 0–7 (audit, database ORM integrations, auth, sessions, cache,
-realtime, jobs, storage) are delivered with real implementations, real integration tests and synced documentation;
-the measured gate is 826/826 runtime, 150/150 security, 16/16 type-test projects. Phases 8–12
-(mail, validation/testing, cross-package integration,
-production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 8.
+promises. Completion-plan Phases 0–8 (audit, database ORM integrations, auth, sessions, cache,
+realtime, jobs, storage, mail) are delivered with real implementations, real integration tests and synced documentation;
+the measured gate is 871/871 runtime, 160/160 security, 16/16 type-test projects. Phases 9–12
+(validation/testing, cross-package integration,
+production/release audit, CLI/blueprint ecosystem) remain — the next action is Phase 9.

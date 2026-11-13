@@ -5,6 +5,28 @@ export interface MailAddress {
   readonly name?: string;
 }
 
+/**
+ * A file attached to a message. `content` is either raw bytes, a UTF-8 string,
+ * or a base64 string when `encoding: 'base64'` is set. Filenames are validated
+ * against header injection, path traversal and control characters before any
+ * provider ever sees them (see SEC-072, SEC-073).
+ */
+export interface MailAttachment {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly content: string | Uint8Array;
+  readonly encoding?: 'base64';
+  readonly contentId?: string;
+  readonly inline?: boolean;
+}
+
+export const MAX_ATTACHMENTS = 20;
+export const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const DEFAULT_MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENT_FILENAME_LENGTH = 255;
+export const MAX_ATTACHMENT_CONTENT_TYPE_LENGTH = 255;
+export const MAX_ATTACHMENT_CONTENT_ID_LENGTH = 128;
+
 export interface MailMessage {
   readonly from: MailAddress;
   readonly to: readonly MailAddress[];
@@ -15,11 +37,23 @@ export interface MailMessage {
   readonly text?: string;
   readonly html?: string;
   readonly headers?: Readonly<Record<string, string>>;
+  readonly attachments?: readonly MailAttachment[];
+}
+
+/** Provider-reported delivery metadata. Never contains credentials. */
+export interface MailDeliveryInfo {
+  readonly accepted: readonly string[];
+  readonly rejected: readonly string[];
+  readonly response: string;
+  readonly backend: 'smtp' | 'http' | 'test';
+  readonly envelopeFrom?: string;
+  readonly envelopeTo?: readonly string[];
 }
 
 export interface TransportReceipt {
   readonly messageId: string;
   readonly acceptedAt: number;
+  readonly delivery?: MailDeliveryInfo;
 }
 
 /** Contract for a mail delivery backend (SMTP, HTTP API, ...). */
@@ -79,13 +113,73 @@ export class MailClosedError extends MailError {
     this.name = 'MailClosedError';
   }
 }
+/** Invalid provider/adapter configuration (host, TLS, endpoint, credentials shape). */
+export class MailConfigurationError extends MailError {
+  constructor(message: string, options: MailErrorOptions = {}) {
+    super('SX_MAIL_CONFIG', message, options);
+    this.name = 'MailConfigurationError';
+  }
+}
 
 const EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
 const CRLF = /[\r\n\u0000]/;
+const CONTROL = /[\u0000-\u001f\u007f]/;
+const MIME_TYPE = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=[A-Za-z0-9!#$&^_.+/=-]+)*$/;
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+const HEADER_INJECTION = /[\r\n\u0000]/;
+/** Custom headers may never shadow structural or recipient headers (BCC leaks, MIME smuggling). */
+const RESERVED_HEADERS = new Set([
+  'from', 'to', 'cc', 'bcc', 'subject', 'reply-to', 'date', 'message-id',
+  'mime-version', 'content-type', 'content-transfer-encoding', 'content-disposition',
+  'content-id', 'return-path', 'sender',
+]);
 
 function assertNoInjection(value: string, label: string): void {
   if (CRLF.test(value)) throw new MailValidationError(`${label} must not contain CRLF or NUL characters.`);
+}
+
+/** Decode an attachment's `content` into raw bytes, validating base64 strictly. */
+export function attachmentBytes(attachment: MailAttachment): Uint8Array {
+  if (attachment.encoding === 'base64') {
+    if (typeof attachment.content !== 'string' || attachment.content.length % 4 !== 0 || !BASE64.test(attachment.content)) {
+      throw new MailValidationError('A base64 attachment must contain valid, padded base64 text.');
+    }
+    return new Uint8Array(Buffer.from(attachment.content, 'base64'));
+  }
+  if (typeof attachment.content === 'string') return new Uint8Array(Buffer.from(attachment.content, 'utf8'));
+  return new Uint8Array(attachment.content);
+}
+
+/** Validate one attachment. Throws MailValidationError on any unsafe shape. */
+export function validateAttachment(attachment: MailAttachment, label: string): void {
+  if (!attachment || typeof attachment !== 'object') throw new MailValidationError(`${label} must be an attachment object.`);
+  if (typeof attachment.filename !== 'string' || attachment.filename.length === 0 || attachment.filename.length > MAX_ATTACHMENT_FILENAME_LENGTH) {
+    throw new MailValidationError(`${label}.filename is invalid.`);
+  }
+  // Header injection + path traversal + control characters. ':' is rejected so a
+  // filename can never carry a scheme or a Windows drive, and separators so a
+  // provider that writes to disk can never escape its attachment directory.
+  if (CONTROL.test(attachment.filename) || /[\\/:]/.test(attachment.filename) || attachment.filename === '.' || attachment.filename === '..' || attachment.filename.startsWith('.')) {
+    throw new MailValidationError(`${label}.filename must not contain control characters, path separators, colons, or leading/traversal dots.`);
+  }
+  if (typeof attachment.contentType !== 'string' || attachment.contentType.length === 0 || attachment.contentType.length > MAX_ATTACHMENT_CONTENT_TYPE_LENGTH || HEADER_INJECTION.test(attachment.contentType) || !MIME_TYPE.test(attachment.contentType)) {
+    throw new MailValidationError(`${label}.contentType is not a valid MIME type.`);
+  }
+  if (attachment.encoding !== undefined && attachment.encoding !== 'base64') {
+    throw new MailValidationError(`${label}.encoding must be 'base64' when provided.`);
+  }
+  if (typeof attachment.content !== 'string' && !(attachment.content instanceof Uint8Array)) {
+    throw new MailValidationError(`${label}.content must be a string or Uint8Array.`);
+  }
+  if (attachment.contentId !== undefined) {
+    if (typeof attachment.contentId !== 'string' || attachment.contentId.length === 0 || attachment.contentId.length > MAX_ATTACHMENT_CONTENT_ID_LENGTH || CONTROL.test(attachment.contentId) || /[<>\s]/.test(attachment.contentId)) {
+      throw new MailValidationError(`${label}.contentId is invalid.`);
+    }
+  }
+  if (attachment.inline !== undefined && typeof attachment.inline !== 'boolean') {
+    throw new MailValidationError(`${label}.inline must be a boolean.`);
+  }
 }
 
 export function validateAddress(address: MailAddress, label: string): void {
@@ -102,12 +196,18 @@ export function validateAddress(address: MailAddress, label: string): void {
 
 export interface ValidateMessageOptions {
   readonly maxBodyBytes?: number;
+  readonly maxAttachmentBytes?: number;
+  readonly maxTotalAttachmentBytes?: number;
+  readonly maxAttachments?: number;
 }
 
 /** Validate a message. Header-injection surfaces (CRLF/NUL) are rejected everywhere they could reach a header. */
 export function validateMessage(message: MailMessage, options: ValidateMessageOptions = {}): void {
   if (!message || typeof message !== 'object') throw new MailValidationError('A message object is required.');
   const maxBodyBytes = options.maxBodyBytes ?? 1024 * 1024;
+  const maxAttachmentBytes = options.maxAttachmentBytes ?? DEFAULT_MAX_ATTACHMENT_BYTES;
+  const maxTotalAttachmentBytes = options.maxTotalAttachmentBytes ?? DEFAULT_MAX_TOTAL_ATTACHMENT_BYTES;
+  const maxAttachments = options.maxAttachments ?? MAX_ATTACHMENTS;
   validateAddress(message.from, 'from');
   if (!Array.isArray(message.to) || message.to.length === 0 || message.to.length > 100) {
     throw new MailValidationError('"to" must contain between 1 and 100 recipients.');
@@ -142,8 +242,22 @@ export function validateMessage(message: MailMessage, options: ValidateMessageOp
     if (entries.length > 64) throw new MailValidationError('"headers" must not exceed 64 entries.');
     for (const [key, value] of entries) {
       if (!HEADER_NAME.test(key)) throw new MailValidationError(`Invalid header name: ${key}`);
+      if (RESERVED_HEADERS.has(key.toLowerCase())) throw new MailValidationError(`Custom header ${key} would override a structural header.`);
       if (typeof value !== 'string' || value.length > 998) throw new MailValidationError(`Invalid header value for ${key}.`);
       assertNoInjection(value, `headers.${key}`);
+    }
+  }
+  if (message.attachments !== undefined) {
+    if (!Array.isArray(message.attachments) || message.attachments.length > maxAttachments || message.attachments.length > MAX_ATTACHMENTS) {
+      throw new MailValidationError(`"attachments" must be an array of at most ${Math.min(maxAttachments, MAX_ATTACHMENTS)} items.`);
+    }
+    let total = 0;
+    for (const [i, attachment] of message.attachments.entries()) {
+      validateAttachment(attachment, `attachments[${i}]`);
+      const size = attachmentBytes(attachment).byteLength;
+      if (size > maxAttachmentBytes) throw new MailValidationError(`attachments[${i}] exceeds the maximum attachment size.`);
+      total += size;
+      if (total > maxTotalAttachmentBytes) throw new MailValidationError('The total attachment size exceeds the configured limit.');
     }
   }
 }
@@ -241,6 +355,9 @@ export interface MailerOptions {
   readonly sleep?: (ms: number) => Promise<void>;
   readonly onError?: (error: Error, attempt: number) => void;
   readonly maxBodyBytes?: number;
+  readonly maxAttachmentBytes?: number;
+  readonly maxTotalAttachmentBytes?: number;
+  readonly maxAttachments?: number;
 }
 
 export interface SendTemplateOptions {
@@ -250,6 +367,7 @@ export interface SendTemplateOptions {
   readonly bcc?: readonly MailAddress[];
   readonly replyTo?: MailAddress;
   readonly headers?: Readonly<Record<string, string>>;
+  readonly attachments?: readonly MailAttachment[];
   readonly data: Readonly<Record<string, unknown>>;
   readonly render?: RenderTemplateOptions;
 }
@@ -264,7 +382,7 @@ export class Mailer {
   readonly #now: () => number;
   readonly #sleep: (ms: number) => Promise<void>;
   readonly #onError: MailerOptions['onError'];
-  readonly #maxBodyBytes: number;
+  readonly #validateOptions: ValidateMessageOptions;
   #closed = false;
 
   constructor(options: MailerOptions) {
@@ -281,21 +399,31 @@ export class Mailer {
     this.#now = options.now ?? Date.now;
     this.#sleep = options.sleep ?? ((ms) => new Promise<void>((resolve) => { setTimeout(resolve, ms); }));
     this.#onError = options.onError;
-    this.#maxBodyBytes = options.maxBodyBytes ?? 1024 * 1024;
+    this.#validateOptions = Object.freeze({
+      maxBodyBytes: options.maxBodyBytes ?? 1024 * 1024,
+      ...(options.maxAttachmentBytes !== undefined ? { maxAttachmentBytes: options.maxAttachmentBytes } : {}),
+      ...(options.maxTotalAttachmentBytes !== undefined ? { maxTotalAttachmentBytes: options.maxTotalAttachmentBytes } : {}),
+      ...(options.maxAttachments !== undefined ? { maxAttachments: options.maxAttachments } : {}),
+    });
   }
 
   get isClosed(): boolean { return this.#closed || this.#transport.isClosed; }
 
   async send(message: MailMessage): Promise<SendReceipt> {
     this.#assertOpen();
-    validateMessage(message, { maxBodyBytes: this.#maxBodyBytes });
+    validateMessage(message, this.#validateOptions);
     const frozen = freezeMessage(message);
     const errors: Error[] = [];
     for (let attempt = 1; attempt <= this.#retry.maxAttempts; attempt += 1) {
       this.#assertOpen();
       try {
         const receipt = await this.#transport.send(frozen);
-        return Object.freeze({ messageId: receipt.messageId, acceptedAt: receipt.acceptedAt, attempts: attempt });
+        return Object.freeze({
+          messageId: receipt.messageId,
+          acceptedAt: receipt.acceptedAt,
+          attempts: attempt,
+          ...(receipt.delivery !== undefined ? { delivery: receipt.delivery } : {}),
+        });
       } catch (error) {
         const err = toError(error);
         errors.push(err);
@@ -321,6 +449,7 @@ export class Mailer {
       ...(envelope.bcc !== undefined ? { bcc: envelope.bcc } : {}),
       ...(envelope.replyTo !== undefined ? { replyTo: envelope.replyTo } : {}),
       ...(envelope.headers !== undefined ? { headers: envelope.headers } : {}),
+      ...(envelope.attachments !== undefined ? { attachments: envelope.attachments } : {}),
       subject: rendered.subject,
       ...(rendered.text !== undefined ? { text: rendered.text } : {}),
       ...(rendered.html !== undefined ? { html: rendered.html } : {}),
@@ -344,6 +473,12 @@ function freezeMessage(message: MailMessage): MailMessage {
     Object.freeze(list.map((a) => Object.freeze({ ...a }))) as readonly MailAddress[];
   const cc = message.cc === undefined ? undefined : freezeList(message.cc);
   const bcc = message.bcc === undefined ? undefined : freezeList(message.bcc);
+  const attachments = message.attachments === undefined
+    ? undefined
+    : Object.freeze(message.attachments.map((a) => Object.freeze({
+        ...a,
+        content: typeof a.content === 'string' ? a.content : new Uint8Array(a.content),
+      })));
   return Object.freeze({
     from: Object.freeze({ ...message.from }),
     to: freezeList(message.to),
@@ -354,5 +489,6 @@ function freezeMessage(message: MailMessage): MailMessage {
     ...(message.text !== undefined ? { text: message.text } : {}),
     ...(message.html !== undefined ? { html: message.html } : {}),
     ...(message.headers !== undefined ? { headers: Object.freeze({ ...message.headers }) } : {}),
+    ...(attachments !== undefined ? { attachments } : {}),
   }) as MailMessage;
 }

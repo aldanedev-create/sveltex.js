@@ -1,7 +1,7 @@
 {
   "name": "@sveltex/mail",
   "version": "0.1.0",
-  "description": "Email message contracts with template rendering, retries, and a deterministic test transport",
+  "description": "Email message contracts, attachments, real SMTP/HTTP provider adapters, MIME serialization, templates, retries, and a deterministic test transport",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -20,6 +20,22 @@
     "./test-transport": {
       "types": "./dist/test-transport.d.ts",
       "import": "./dist/test-transport.js"
+    },
+    "./mime": {
+      "types": "./dist/mime.d.ts",
+      "import": "./dist/mime.js"
+    },
+    "./smtp": {
+      "types": "./dist/smtp.d.ts",
+      "import": "./dist/smtp.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
     }
   },
   "scripts": {
@@ -29,6 +45,7 @@
     "test": "npm run build && node --test tests/*.test.mjs tests/security/*.test.mjs && tsc -p tests/types/tsconfig.json",
     "test:unit": "npm test",
     "test:security": "npm run build && node --test tests/security/*.test.mjs",
+    "test:integration": "npm run build && node --test tests/integration/*.test.mjs",
     "test:types": "npm run build && tsc -p tests/types/tsconfig.json",
     "test:coverage": "npm run build && node --experimental-test-coverage --test"
   },
@@ -42,13 +59,23 @@
     "sveltex",
     "mail",
     "email",
+    "smtp",
+    "mime",
+    "attachments",
     "templates",
     "transport"
   ],
   "dependencies": {
-    "@sveltex/shared": "workspace:*"
+    "@sveltex/shared": "workspace:*",
+    "nodemailer": "^7.0.13"
   },
   "devDependencies": {
-    "@types/node": "^26.6.6"
+    "@sveltex/auth": "workspace:*",
+    "@types/mailparser": "^3.9.0",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^7.0.12",
+    "@types/smtp-server": "^3.5.13",
+    "mailparser": "^3.14.3",
+    "smtp-server": "^3.21.4"
   }
 }

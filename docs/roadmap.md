@@ -2,7 +2,7 @@
 
 SvelteX is developed in five stages. The CLI is the final stage, even though it will be the main onboarding tool developers can choose to install first. The existing Core and SvelteKit adapter are retained and improved; they are not rebuilt.
 
-> **Status (2026-11-12): all five stages are implemented and verified; completion-plan Phases 0–7 delivered.** 826 runtime tests, 150 security tests, and 16 type-test projects pass with live PostgreSQL 16 / MySQL 8.0 / Redis 7 / MinIO services (0 failures, 0 skipped). See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
+> **Status (2026-11-12): all five stages are implemented and verified; completion-plan Phases 0–8 delivered.** 871 runtime tests, 160 security tests, and 16 type-test projects pass with live PostgreSQL 16 / MySQL 8.0 / Redis 7 / MinIO services (0 failures, 0 skipped). See [`docs/specification.md`](./specification.md) for the authoritative package inventory and CLI specification, and [`docs/audit/README.md`](./audit/README.md) for the detailed status log.
 
 ## Stage 1 — Foundation
 
@@ -50,7 +50,7 @@ Each package is independently installable. Provider-specific drivers should be o
 
 **Responsibilities:** realtime transports, durable job/worker contracts, object storage, email providers, and test application/fake adapter helpers.
 
-**Current state:** complete. All five packages ship real implementations behind explicit adapter contracts, with 223 runtime + 76 security tests, public-API type tests, and READMEs documenting deployment limitations. `@sveltex/realtime` ships **real WebSocket and SSE gateways** (verified on ephemeral TCP ports) in addition to its in-process transport; `@sveltex/jobs` ships **real Redis (`ioredis` + Lua) and SQL (SQLite/PostgreSQL) durable queues** (verified against live Redis 7 / PostgreSQL 16); `@sveltex/storage` ships a **real S3-compatible adapter with SigV4 presigned URLs** (official AWS SDK v3, verified against live MinIO). SMTP/HTTP adapters are still not shipped or advertised.
+**Current state:** complete. All five packages ship real implementations behind explicit adapter contracts, with 267 runtime + 86 security tests, public-API type tests, and READMEs documenting deployment limitations. `@sveltex/realtime` ships **real WebSocket and SSE gateways** (verified on ephemeral TCP ports) in addition to its in-process transport; `@sveltex/jobs` ships **real Redis (`ioredis` + Lua) and SQL (SQLite/PostgreSQL) durable queues** (verified against live Redis 7 / PostgreSQL 16); `@sveltex/storage` ships a **real S3-compatible adapter with SigV4 presigned URLs** (official AWS SDK v3, verified against live MinIO). `@sveltex/mail` ships **real SMTP (nodemailer) and HTTP (strict v1 JSON envelope) adapters, attachments, an RFC 5322/2045 MIME serializer and auth-workflow senders** (verified against real SMTP/HTTP servers and real `@sveltex/auth` workflows in 24 integration tests).
 
 **Exit:** provider boundaries, retries, cleanup, failure behavior, authorization, and test doubles are verified.
 
@@ -65,7 +65,7 @@ Each package is independently installable. Provider-specific drivers should be o
 
 The CLI is implemented only after the package APIs and integration metadata are stable. It should be the best first experience for creating a SvelteX application, but it must orchestrate the framework rather than contain framework logic.
 
-**Current state:** complete, built last. `packages/cli/` publishes `sveltex` with 17 commands, six official templates (41 `.tmpl` assets), four welcome pages, static/redacted diagnostics, integration add/remove, generators, upgrade/migration tooling, preview/dry-run/rollback safety, and stable `--json` output with exit codes `0`–`4`. 57 CLI tests pass; `npm pack --dry-run` verified. Generated apps never depend on the CLI at runtime. No external provider adapter is shipped or advertised.
+**Current state:** complete, built last. `packages/cli/` publishes `sveltex` with 17 commands, six official templates (41 `.tmpl` assets), four welcome pages, static/redacted diagnostics, integration add/remove, generators, upgrade/migration tooling, preview/dry-run/rollback safety, and stable `--json` output with exit codes `0`–`4`. 58 CLI tests pass (including a Phase 8 registry/adapter consistency test); `npm pack --dry-run` verified. Generated apps never depend on the CLI at runtime. The registry advertises only real in-package adapter subpaths (SMTP/HTTP mail, S3 storage, WS/SSE realtime, Redis/SQL jobs) as self-hosted clients — no hosted/managed provider is shipped or advertised.
 
 **Exit status:** file changes are previewable and non-destructive; templates are tested (zero unrendered placeholders); `dev`/`build`/`preview`/`check`/`test` delegate to the project's own scripts. **Not yet claimed:** a consumer-side `install → typecheck → build` of a generated app against registry-published `@sveltex/*` packages — the workspace packages are unpublished, so this remains CI/release work.
 

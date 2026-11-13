@@ -491,7 +491,7 @@ Provide a consistent file storage API with local and cloud storage adapters.
 
 ---
 
-# Phase 8 — Mail
+# Phase 8 — Mail — ✅ delivered (2026-11-12)
 
 Package: `@sveltex/mail`
 
@@ -501,27 +501,34 @@ Provide a unified email interface with test and production transports.
 
 ### Tasks
 
-- [ ] SMTP integration.
-- [ ] Provider adapter interface.
-- [ ] HTML email support.
-- [ ] Plain-text email support.
-- [ ] Templates.
-- [ ] Attachments.
-- [ ] Retry behavior.
-- [ ] Delivery metadata.
-- [ ] Error handling.
-- [ ] Authentication workflow integration.
-- [ ] Test transport.
+- [x] SMTP integration — `SmtpTransport` (`./smtp`) on official `nodemailer`, real AUTH/STARTTLS/implicit TLS, `verify()`.
+- [x] Provider adapter interface — `HttpTransport` (`./http`) with the strict `application/vnd.sveltex.mail.v1+json` envelope over real `fetch`.
+- [x] HTML email support — preserved `html` body; now serialized as `multipart/alternative`.
+- [x] Plain-text email support — preserved `text` body; quoted-printable when needed.
+- [x] Templates — preserved `renderTemplate`; `sendTemplate` now forwards attachments.
+- [x] Attachments — `MailAttachment` with strict filename/MIME/content validation, count + byte caps, frozen byte copies.
+- [x] Retry behavior — preserved capped exponential backoff with injectable `sleep`/`now`; verified against real transient SMTP failures.
+- [x] Delivery metadata — `MailDeliveryInfo` (`accepted`/`rejected`/`response`/`backend`) on `TransportReceipt.delivery`.
+- [x] Error handling — `MailConfigurationError`, wrapped `MailTransportError` with safe details, `MailClosedError`.
+- [x] Authentication workflow integration — `./auth` password-reset / email-verification senders structurally compatible with `@sveltex/auth` ports.
+- [x] Test transport — `TestTransport` retained, explicitly not advertised as a provider.
 
 ### Tests
 
-- [ ] Message construction.
-- [ ] HTML and text rendering.
-- [ ] Attachments.
-- [ ] Provider adapters.
-- [ ] Retry behavior.
-- [ ] Failure handling.
-- [ ] Test transport.
+- [x] Message construction — deterministic `buildMimeMessage` (`./mime`), RFC 5322/2045, CRLF-only, RFC 2047/2231.
+- [x] HTML and text rendering — `multipart/alternative`, quoted-printable round-trip, template escaping.
+- [x] Attachments — 10 unit cases + real SMTP wire round-trip with binary/unicode filenames.
+- [x] Provider adapters — 10 SMTP + 9 HTTP real integration cases, plus config/mapping unit tests.
+- [x] Retry behavior — real transient SMTP 4xx retried by `Mailer`; deterministic backoff tests.
+- [x] Failure handling — permanent failure → `MailSendError`, bad AUTH wrapped without credential leakage, bounded HTTP responses, manual redirects.
+- [x] Test transport — preserved 17 pre-existing unit cases; 5 real auth-workflow integration cases.
+
+**Delivery note (2026-11-12):** all 18 Phase 8 tasks/tests are delivered with real
+implementations (no fake provider, no skipped test), 70 mail unit/security tests, 24 real
+integration tests, public-API type tests, SEC-072 – SEC-081 security review, CI integration step,
+package docs and CLI registry truthfulness fix. Full gate: `pnpm check` **871/871**,
+`pnpm test:security` **160/160**, `pnpm test:types` **16/16**. Version stays `0.1.0` (Phase 11).
+See [`docs/completion/phase-8-mail.md`](completion/phase-8-mail.md).
 
 ---
 

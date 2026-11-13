@@ -22,8 +22,11 @@ function spec(entry: IntegrationSpec): IntegrationSpec {
 }
 
 /**
- * Only packages that actually exist in this monorepo are listed. Providers that
- * are not shipped (SMTP, S3, WebSocket, hosted Redis, ...) are never advertised.
+ * Only packages that actually exist in this monorepo are listed, and `adapters`
+ * lists only their real in-package subpath exports (checked against each package's
+ * `exports` map). Hosted providers and integrations that do not exist are never
+ * invented or advertised; the shipped adapters are self-hosted clients configured
+ * by the application (SMTP server, S3 endpoint, Redis URL, ...), not hosted services.
  */
 export const INTEGRATIONS: readonly IntegrationSpec[] = Object.freeze([
   spec({
@@ -88,30 +91,30 @@ export const INTEGRATIONS: readonly IntegrationSpec[] = Object.freeze([
   }),
   spec({
     id: 'realtime', packageName: '@sveltex/realtime', version: SVELTEX_PACKAGE_VERSION,
-    description: 'Typed channels, authorization hooks, and an in-process transport',
-    adapters: ['@sveltex/realtime/in-process'], envNames: [],
-    configHint: 'InProcessTransport is process-local; no WebSocket/SSE provider is shipped.',
+    description: 'Typed channels, authorization hooks, real WebSocket/SSE gateways, and an in-process transport',
+    adapters: ['@sveltex/realtime/in-process', '@sveltex/realtime/websocket', '@sveltex/realtime/sse', '@sveltex/realtime/protocol', '@sveltex/realtime/connection'], envNames: [],
+    configHint: 'WebSocket (@sveltex/realtime/websocket) and SSE (@sveltex/realtime/sse) gateways are real but single-process fan-out; no cross-instance broker is shipped. InProcessTransport is in-memory.',
     processLocalOnly: true, developmentOnly: false,
   }),
   spec({
     id: 'jobs', packageName: '@sveltex/jobs', version: SVELTEX_PACKAGE_VERSION,
-    description: 'Job queue contracts, retries, backoff, and an in-memory queue',
-    adapters: ['@sveltex/jobs/in-memory'], envNames: [],
-    configHint: 'InMemoryJobQueue is not durable or distributed; use a durable adapter for production.',
+    description: 'Job queue contracts, retries, backoff, in-memory and real Redis/SQL durable queues',
+    adapters: ['@sveltex/jobs/in-memory', '@sveltex/jobs/redis', '@sveltex/jobs/sql', '@sveltex/jobs/registry', '@sveltex/jobs/scheduler'], envNames: [],
+    configHint: 'InMemoryJobQueue is process-local; RedisJobQueue (@sveltex/jobs/redis) and SqlJobQueue (@sveltex/jobs/sql) are real durable queues verified against Redis 7 / PostgreSQL 16.',
     processLocalOnly: true, developmentOnly: false,
   }),
   spec({
     id: 'storage', packageName: '@sveltex/storage', version: SVELTEX_PACKAGE_VERSION,
-    description: 'Storage contracts with a real local-filesystem driver',
-    adapters: ['@sveltex/storage/local'], envNames: [],
-    configHint: 'LocalStorageDriver writes to local disk; no S3/object-store provider is shipped.',
+    description: 'Storage facade with real local-filesystem and S3-compatible drivers plus SigV4 presigned URLs',
+    adapters: ['@sveltex/storage/local', '@sveltex/storage/s3'], envNames: [],
+    configHint: 'LocalStorageDriver writes to local disk; S3StorageDriver (@sveltex/storage/s3) targets AWS S3 or S3-compatible services with real SigV4 presigned GET/PUT.',
     processLocalOnly: true, developmentOnly: false,
   }),
   spec({
     id: 'mail', packageName: '@sveltex/mail', version: SVELTEX_PACKAGE_VERSION,
-    description: 'Mail contracts, safe templates, retries, and a deterministic test transport',
-    adapters: ['@sveltex/mail/test-transport'], envNames: [],
-    configHint: 'No SMTP/HTTP provider is shipped. Supply a MailTransport implementation.',
+    description: 'Mail contracts, attachments, MIME serialization, real SMTP/HTTP adapters, templates, retries, and a deterministic test transport',
+    adapters: ['@sveltex/mail/test-transport', '@sveltex/mail/smtp', '@sveltex/mail/http', '@sveltex/mail/mime', '@sveltex/mail/auth'], envNames: [],
+    configHint: 'SmtpTransport (@sveltex/mail/smtp) and HttpTransport (@sveltex/mail/http) are real providers; @sveltex/mail/auth wires auth workflows. TestTransport is in-memory for tests only.',
     processLocalOnly: true, developmentOnly: false,
   }),
   spec({

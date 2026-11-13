@@ -22,11 +22,11 @@
 | `@sveltex/realtime` | ✅ Pass | ✅ Pass | ✅ 70/70 | ✅ 20/20 | ✅ Pass | **Stage 4 — Complete (Phase 5: real WS/SSE gateways, strict protocol, connection lifecycle)** |
 | `@sveltex/jobs` | ✅ Pass | ✅ Pass | ✅ 51/51 | ✅ 17/17 | ✅ Pass | **Stage 4 — Complete (Phase 6: real Redis + SQL queues, strict serialization, registry, scheduler)** |
 | `@sveltex/storage` | ✅ Pass | ✅ Pass | ✅ 44/44 | ✅ 18/18 | ✅ Pass | **Stage 4 — Complete (Phase 7: real S3 + presigned URLs)** |
-| `@sveltex/mail` | ✅ Pass | ✅ Pass | ✅ 26/26 | ✅ 9/9 | ✅ Pass | **Stage 4 — Ready (test transport)** |
+| `@sveltex/mail` | ✅ Pass | ✅ Pass | ✅ 70/70 | ✅ 19/19 | ✅ Pass | **Stage 4 — Complete (Phase 8: real SMTP/HTTP adapters, MIME, attachments, auth senders; 24 integration tests)** |
 | `@sveltex/testing` | ✅ Pass | ✅ Pass | ✅ 32/32 | ✅ 12/12 | ✅ Pass | **Stage 4 — Ready (real core DI)** |
-| `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 57/57 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last)** |
+| `sveltex` (CLI) | ✅ Pass | ✅ Pass | ✅ 58/58 | ✅ 9/9 | ✅ Pass | **Stage 5 — Ready (built last; Phase 8 registry consistency test)** |
 | **Fixture** | ✅ Pass | ✅ Pass | N/A | N/A | N/A | **Builds successfully** |
-| **Total** | **All pass** | **All pass** | **826/826** | **150/150** | **16/16** | **All pass** |
+| **Total** | **All pass** | **All pass** | **871/871** | **160/160** | **16/16** | **All pass** |
 
 ---
 
@@ -170,13 +170,13 @@ All five packages are independently installable ESM packages with strict `tsconf
 - **Tests:** 44 runtime + 18 security + one public-API type test + **9 real MinIO integration tests** (round-trip, streaming, listing, deletion, presigned GET/PUT with tamper and expiry, traversal, size limits, missing-bucket diagnostics, persistence across instances); **0 skipped**.
 - **Limitations:** presigned PUT uploads expose the service ETag (not a SvelteX SHA-256) because the driver never receives those bytes; no multipart uploads, bucket creation, versioning, object locking, server-side encryption configuration, replication, CDN or virus scanning; package version stays `0.1.0` (Phase 11).
 
-#### `@sveltex/mail` — ✅ Ready (test transport)
+#### `@sveltex/mail` — ✅ Complete (Phase 8)
 
-- **Source:** `src/index.ts` (contracts, validation, templates, retrying `Mailer`) + `src/test-transport.ts`.
-- **Public API:** `Mailer`, `MailTransport`, `MailMessage`, `renderTemplate`, `computeRetryDelay`, `TestTransport` (`./test-transport`), and the `MailError` family.
-- **Features:** address/header validation, CRLF/NUL injection rejection, HTML-escaped template interpolation by default, capped exponential-backoff retries with injectable `sleep`/`now`, permanent failure → `MailSendError` with attempts + cause (never a false success).
-- **Tests:** 26 — 17 unit + 9 security.
-- **Limitations:** no SMTP/HTTP provider adapter is shipped or advertised; `TestTransport` is deterministic in-memory and never sends real email.
+- **Source:** `src/index.ts` (contracts, attachment validation, templates, retrying `Mailer`), `src/test-transport.ts`, `src/mime.ts` (RFC 5322/2045 serializer), `src/smtp.ts` (nodemailer), `src/http.ts` (fetch v1 envelope), `src/auth.ts` (auth-workflow senders).
+- **Public API:** `Mailer`, `MailTransport`, `MailMessage`, `MailAttachment`, `MailDeliveryInfo`, `MailConfigurationError`, `attachmentBytes`, `validateAttachment`, `renderTemplate`, `computeRetryDelay`, `TestTransport` (`./test-transport`), `buildMimeMessage` (`./mime`), `SmtpTransport` (`./smtp`), `HttpTransport` (`./http`), `createPasswordResetMailSender` / `createEmailVerificationMailSender` (`./auth`), and the `MailError` family.
+- **Features:** address/header validation, CRLF/NUL injection rejection, reserved-header rejection (BCC/MIME smuggling guard), HTML-escaped templates, capped exponential-backoff retries, attachments with count/byte caps and frozen byte copies, real SMTP (AUTH/STARTTLS/TLS) and HTTP provider adapters, delivery metadata, auth workflow integration, BCC envelope-only MIME.
+- **Tests:** 70 — 51 unit + 19 security (SEC-072 – SEC-081 added), plus 24 real integration tests (real SMTP/HTTP servers + real `@sveltex/auth`), public-API type tests; 0 skipped.
+- **Limitations:** no DKIM/SPF, bounce handling or delivery tracking; HTTP adapter requires a provider that accepts the v1 envelope; retries are in-process; `TestTransport` is deterministic in-memory and never sends real email.
 
 #### `@sveltex/testing` — ✅ Ready (real core DI)
 
@@ -197,9 +197,9 @@ All five packages are independently installable ESM packages with strict `tsconf
 - **Safety:** `ChangeSet` preview/apply/rollback; `--dry-run` writes nothing; overwrite requires `--force`/`--yes`; `init` composes existing SvelteKit hooks as `userHandle` with `sequence()` and preserves comments; config is statically inspected (never executed) with secret redaction and env names only; `shell: false` with argument arrays; project-name/path/package-specifier validation (leading-dash option injection, encoded traversal, NUL); conflicting lockfiles stop the command; failed installs roll back every CLI-owned change. `init --no-install` fixed to actually skip installation and the automatic project check.
 - **Diagnostics:** `doctor` emits stable codes/severities/paths/safe fixes for Node, package manager, SvelteX/SvelteKit versions, peer compatibility, config validity, hook integration, TypeScript, missing env names, and process-local-vs-multi-instance mismatches. `upgrade` uses CLI-owned metadata only (no registry lookup); `migrate` is preview-first.
 - **Output:** stable `CliResult`, single-object `--json`, exit codes `0`/`1`/`2`/`3`/`4`; `runCli()` never calls `process.exit()`.
-- **Integrations:** registry lists only the 14 real shipped `@sveltex/*` packages. No SMTP/S3/WebSocket/hosted-Redis adapter is shipped or advertised.
-- **Tests:** 57 — 11 unit, 12 command, 7 generator, 6 package-manager, 6 diagnostic, 9 security, 5 e2e — plus a public-API type test. Wired into root `test:security`, `test:types`, and `test:packages`.
-- **Limitations:** no registry lookup or version guessing; no external provider adapters; a consumer-side `install → typecheck → build` of a generated app against published packages is still CI work (workspace packages are unpublished).
+- **Integrations:** registry lists only the 14 real shipped `@sveltex/*` packages and their real in-package adapter subpaths (verified by a consistency test). S3, SMTP/HTTP, WS/SSE and Redis/SQL adapters ship as self-hosted clients; no hosted/managed provider is advertised.
+- **Tests:** 58 — unit (incl. a Phase 8 registry/adapter consistency test), command, generator, package-manager, diagnostic, security, e2e — plus a public-API type test. Wired into root `test:security`, `test:types`, and `test:packages`.
+- **Limitations:** no registry lookup or version guessing; the CLI ships no providers of its own (real adapters ship inside their packages); a consumer-side `install → typecheck → build` of a generated app against published packages is still CI work (workspace packages are unpublished).
 
 ---
 

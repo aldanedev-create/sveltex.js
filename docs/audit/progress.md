@@ -125,7 +125,7 @@
 - [x] `@sveltex/realtime` — typed channels, required authorization hook, per-subscriber de-duplication, `InProcessTransport` (25 tests at that time). WebSocket/SSE adapters were delivered later in completion-plan Phase 5 (Session 12), bringing the package to 70 tests.
 - [x] `@sveltex/jobs` — `JobQueue` contract, `InMemoryJobQueue` (atomic claim, delayed visibility, dedupe, dead-letter), `Worker` (concurrency, retries, capped backoff, graceful shutdown) (24 tests). Durable/distributed broker adapters remain unshipped.
 - [x] `@sveltex/storage` — `StorageDriver` contract, `LocalStorageDriver` (real fs I/O, hashed keys, atomic writes, streaming, symlink rejection) (24 tests). S3/object-store adapters remain unshipped *(Stage 4 snapshot; delivered in Phase 7 — see Session 14)*.
-- [x] `@sveltex/mail` — message/template contracts, retrying `Mailer`, header-injection rejection, `TestTransport` (26 tests). SMTP/HTTP provider adapters remain unshipped.
+- [x] `@sveltex/mail` — message/template contracts, retrying `Mailer`, header-injection rejection, `TestTransport` (26 tests). SMTP/HTTP provider adapters remain unshipped *(Stage 4 snapshot; delivered in Phase 8 — see Session 15)*.
 - [x] `@sveltex/testing` — builders over real core DI, deterministic clock/recorder, request fixtures, in-memory fakes (32 tests).
 
 ### Stage 5 — CLI (build last) — complete
@@ -552,3 +552,67 @@ storage/S3/presign requirements and the specification/audit inventory); final `-
 numbers are recorded in `docs/audit/README.md`.
 
 **Next:** Phase 8 (`@sveltex/mail`) per the plan. Phases 8–12 remain.
+
+## Session 15 — Completion Plan: Phase 8 — `@sveltex/mail` (2026-11-12)
+
+**Objective:** close the Phase 0 gap for `@sveltex/mail` — real SMTP/HTTP provider adapters,
+attachments, delivery metadata and auth-workflow integration — without creating a new package,
+with no fake provider and no skipped test.
+
+**Implementation:**
+- Extended `src/index.ts` with `MailAttachment`, `MailDeliveryInfo`, `TransportReceipt.delivery`,
+  `MailConfigurationError`, `attachmentBytes()`, strict attachment validation (count / per-file /
+  aggregate caps), reserved-header rejection, `sendTemplate` attachment forwarding and frozen
+  message snapshots.
+- New `src/mime.ts` (`./mime`): real RFC 5322/2045 serializer — CRLF-only output, RFC 2047 encoded
+  words, RFC 2231 filenames, quoted-printable text, base64 attachments, `multipart/alternative` +
+  `multipart/mixed` with distinct nested boundaries, BCC envelope-only.
+- New `src/smtp.ts` (`./smtp`): `SmtpTransport` on official nodemailer — AUTH, STARTTLS, implicit TLS,
+  `requireTLS`, `verify()`, `disableFileAccess` / `disableUrlAccess`, credential-free error wrapping,
+  `MailDeliveryInfo` (accepted / rejected / response / envelope).
+- New `src/http.ts` (`./http`): `HttpTransport` on real `fetch` — strict
+  `application/vnd.sveltex.mail.v1+json` envelope, absolute http(s)-only endpoint, optional
+  `allowedHosts` SSRF guard, `redirect: 'manual'`, `AbortSignal.timeout`, bounded response body,
+  required provider `id` / `messageId`.
+- New `src/auth.ts` (`./auth`): `createPasswordResetMailSender` / `createEmailVerificationMailSender`
+  structurally compatible with `@sveltex/auth` ports; links built with `URLSearchParams`, HTML
+  escaped by default. `@sveltex/auth` is a devDependency only (no runtime dependency direction added).
+- Four new subpath exports + `test:integration` script + real dependency stack (nodemailer 7.0.13,
+  smtp-server 3.21.4, mailparser 3.14.3 and type packages). Version stays `0.1.0`.
+- `.github/workflows/ci.yml`: mandatory `pnpm --filter @sveltex/mail test:integration` step; servers
+  start in-process on ephemeral loopback ports, TLS cert generated at runtime with `openssl`, never skipped.
+- Fixed the CLI integration registry's stale "no SMTP/HTTP provider" wording for realtime / jobs /
+  storage / mail and added a consistency test asserting every advertised adapter resolves to a real
+  package subpath export.
+
+**Verification (measured 2026-11-12, live PostgreSQL 16 / MySQL 8.0 / Redis 7 / MinIO + real SMTP/HTTP servers):**
+- `pnpm check` -> **871/871** runtime, 0 failures, 0 skipped, 16 test projects.
+- `pnpm test:security` -> **160/160**, 16 packages, 0 failures, 0 skipped.
+- `pnpm test:types` -> **16/16**.
+- `pnpm --filter @sveltex/mail test` -> **70/70** (51 unit + 19 security); `test:integration` ->
+  **24/24** (10 SMTP + 9 HTTP + 5 auth, 0 skipped).
+- `pnpm --filter @sveltex/jobs test:integration` -> **17/17**, `@sveltex/storage` -> **9/9** (no regression).
+- `npm pack --dry-run --json` -> `@sveltex/mail` 0.1.0, **27 files**, no `src` / `tests` leakage.
+- Phase 7 -> Phase 8: **+45 runtime, +10 security, +24 real integration tests**. No test skipped.
+
+**Docs synced:** `README.md`, `docs/roadmap.md`, `docs/specification.md`, `docs/packages/README.md`,
+`docs/manifest.json` (43 documents), `docs/completion-plan.md` (all 18 Phase 8 checkboxes),
+`docs/completion/phase-0-audit.md` (gap -> completion, criteria, bottom line), `docs/audit/*`
+(README, package-status, testing-status, repository-audit, security-findings SEC-072 – SEC-081,
+progress), `packages/mail/README.md` + `CHANGELOG.md`, and the new
+[`Phase 8 report`](../completion/phase-8-mail.md).
+
+Earlier "SMTP/HTTP provider adapters remain unshipped" lines in this log (Sessions 5-14) are
+**historical Stage 4 / Phase 7-era snapshots**, superseded by this session; they are retained
+verbatim for audit traceability, not as current status.
+
+**Not claimed:** a hosted/managed mail service, DKIM/SPF signing, delivery-status webhooks, queued/bulk
+send, attachment virus scanning, or MIME encryption. `SmtpTransport` / `HttpTransport` are real client
+adapters; a cross-instance realtime broker, SvelteKit `handle` wiring (Phase 10) and the package
+version bump (Phase 11) remain. All are recorded in the Phase 8 report.
+
+**XERJ:** used for repository research throughout Phase 8 (HTTP search on the `ax-docs` index for
+mail / SMTP / transport requirements and the specification / audit inventory); final `--fresh` rebuild
+numbers are recorded in `docs/audit/README.md`.
+
+**Next:** Phase 9 (`@sveltex/validation` + `@sveltex/testing`) per the plan. Phases 9-12 remain.

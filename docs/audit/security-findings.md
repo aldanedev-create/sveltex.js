@@ -29,12 +29,12 @@
 | SEC-017 | Info | Realtime authorization boundary | `RealtimeHub` requires an explicit `authorize` hook (no implicit allow) and evaluates `deliver` **per subscriber**; delivered payloads are deep-frozen; channel names reject traversal/control characters; at-least-once redelivery is de-duplicated by a bounded **per-subscriber** id cache (an initial global-set design was corrected). 8 pre-existing security tests; Phase 5 adds 12 (SEC-047 – SEC-052). | **Secure** |
 | SEC-018 | Info | Job queue atomicity and shutdown | `InMemoryJobQueue.claim()` is atomic so at-least-once redelivery cannot double-execute a side effect; `Worker.stop()` drains in-flight handlers while rejecting new work synchronously; retries/backoff are capped and permanent failures dead-letter instead of looping. Phase 6 extends this to `RedisJobQueue` (four Lua scripts for atomic cross-process enqueue/claim/finalize/cancel) and `SqlJobQueue` (transaction-based `FOR UPDATE SKIP LOCKED` claim, partial unique dedupe index, concurrent-safe schema creation). Strict `sveltex-jobs:v1:` serialization rejects corrupt/legacy/tampered records. 7 pre-existing + 10 Phase 6 security tests (SEC-053 – SEC-062). | **Secure** |
 | SEC-019 | Info | Storage path traversal and atomicity | User keys reject absolute paths, backslashes, `.`/`..` segments, and control characters, then map to **SHA-256 hex filenames** (user paths never reach the filesystem). Writes are atomic (temp + `rename`, metadata sidecar last); a symlinked `objects/` directory is rejected; reads verify etag/size. Phase 7 extends this to S3 keys (never used as filesystem paths), SigV4 presigned URLs with bounded TTL, secret/URL/header checks, reserved-metadata and prototype-pollution rejection, and 9 real MinIO integration tests. 9 pre-existing + 9 Phase 7 security tests (SEC-063 – SEC-071). | **Secure** |
-| SEC-020 | Info | Mail header injection and XSS | CRLF/NUL injection is rejected in subjects, names, and headers; `renderTemplate` HTML-escapes interpolated values by default; bounded retries are deterministic and a permanent failure throws `MailSendError` with `attempts` + `cause` — never a false success. `TestTransport` never contacts an external service. 9 security tests. | **Secure** |
+| SEC-020 | Info | Mail header injection and XSS | CRLF/NUL injection is rejected in subjects, names, and headers; `renderTemplate` HTML-escapes interpolated values by default; bounded retries are deterministic and a permanent failure throws `MailSendError` with `attempts` + `cause` — never a false success. `TestTransport` never contacts an external service. Phase 8 adds real SMTP/HTTP adapters, attachments, MIME serialization and auth senders behind the same validation boundary (SEC-072 – SEC-081, 10 new cases). 9 pre-existing + 10 Phase 8 security tests. | **Secure** |
 | SEC-021 | Info | Testing helpers do not bypass real core | `@sveltex/testing` delegates to the real `@sveltex/core` DI/lifecycle, so config validation, request-scope enforcement, and lifecycle hook failures are surfaced rather than bypassed. `withTestApplication` guarantees cleanup even on a thrown body; forgotten request scopes are disposed; fakes expose frozen defensive snapshots and reject use after `close()`. 12 security tests. | **Secure** |
 | SEC-022 | Info | CLI never executes project configuration | `sveltex config`/`doctor` inspect `sveltex.config.ts` **as source text** (default-export detection, referenced env names, unsafe-exec markers) and never import or evaluate it. Shape validation is delegated to `@sveltex/config`. Secret values are redacted by key pattern and never printed; only missing env var **names** are reported — the CLI never invents or reads a value. 9 CLI security tests. | **Secure** |
 | SEC-023 | Info | No shell interpretation / option injection | Every child process uses `spawn(..., { shell: false })` with argument arrays only. Project names, script names, and package specifiers are validated against shell metacharacters; a leading-dash specifier such as `--ignore-scripts` is rejected (found by a security test and fixed). Generated paths reject absolute paths, `.`/`..`, encoded traversal (`%2e`/`%2f`/`%5c`), and NUL. | **Secure** |
 | SEC-024 | Info | CLI file mutations are previewable and reversible | Existing files are never overwritten without `--force`/`--yes`; `--dry-run` writes nothing; all CLI-owned edits go through `ChangeSet` with rollback (including partial-failure rollback of already-applied files). `init` composes an existing `src/hooks.server.ts` handle as `userHandle` with SvelteKit `sequence()` instead of replacing it, preserving user comments. A failed install rolls back every generated/edited file. | **Secure** |
-| SEC-025 | Info | No fake integrations or invented compatibility | The CLI integration registry lists only the 14 real shipped `@sveltex/*` packages; no SMTP, S3, hosted-Redis, or other external provider adapter is advertised (the real WebSocket/SSE gateways shipped in `@sveltex/realtime` Phase 5 are in-package network transports, not advertised hosted providers). `upgrade` reports CLI-owned metadata only (no registry lookup, no guessed versions). `doctor` reports missing env **names** only and flags process-local adapters in multi-instance/production setups. The `saas` starter explicitly disclaims auth, persistence, billing, and payments. | **Secure** |
+| SEC-025 | Info | No fake integrations or invented compatibility | The CLI integration registry lists only the 14 real shipped `@sveltex/*` packages, and its `adapters` field now lists only **real in-package subpath exports** — a consistency test resolves every advertised adapter against the package's `exports` map. Real in-package adapters shipped in Phases 5–8 (WebSocket/SSE gateways, Redis/SQL job queues, S3 storage, SMTP/HTTP mail) are advertised as self-hosted clients, never as hosted providers; no external/hosted provider or integration that does not exist is invented. `upgrade` reports CLI-owned metadata only (no registry lookup, no guessed versions). `doctor` reports missing env **names** only and flags process-local adapters in multi-instance/production setups. The `saas` starter explicitly disclaims auth, persistence, billing, and payments. | **Secure** |
 | SEC-026 | Low (fixed) | `init --no-install` was silently ignored | The flag is globally accepted (used by `create`) but `init` still invoked the package manager, so an explicit "do not install" request executed an install and failed offline, rolling back CLI-owned changes. Fixed: `init` now honors `--no-install`, skips installation and the automatic project check, reports `installed: false`, and lists manual install/check steps. A regression test asserts no runner calls occur. | **Fixed** |
 | SEC-027 | Info | Pooled adapters never rewrite SQL | `PostgresAdapter` and `MysqlAdapter` bind values through their drivers' parameterized APIs (`$n` / `?`); no interpolation or SQL parsing. Injection-shaped values are tested against real servers and return zero rows. `Database` still validates SQL and parameter types before dispatch. | **Secure** |
 | SEC-028 | Info | Migration ledger identifiers and checksums | Ledger table names are restricted to simple SQL identifiers; injection-shaped names throw. Every migration is SHA-256 checksummed over its full SQL body, and already-applied migrations must be an unchanged prefix, so tampering or reordering is rejected. Unknown dialects throw instead of being guessed. | **Secure** |
@@ -162,7 +162,7 @@
 - **Realtime (SEC-017).** `RealtimeHub` has **no implicit allow default** — `authorize` is required and consulted for `publish`, `subscribe`, and `deliver`. `deliver` is evaluated **per subscriber**, so a privileged channel cannot leak to an unauthorized listener. Delivered payloads are deep-frozen so one subscriber cannot mutate a shared value. At-least-once redelivery is de-duplicated by a **bounded per-subscriber** id cache (an initial global-set design was corrected because it would have suppressed the second subscriber). Channel names reject traversal/control characters. Covered by 8 security tests.
 - **Jobs (SEC-018).** `InMemoryJobQueue.claim()` is atomic and increments attempts under a single synchronous pass, so at-least-once redelivery cannot double-execute a side effect. `Worker.stop()` drains already-chained in-flight handlers while rejecting new work synchronously. Backoff is capped, retries are bounded, and permanent failures move to dead-letter rather than looping. Covered by 7 security tests.
 - **Storage (SEC-019).** User keys are validated against absolute paths, backslashes, `.`/`..` segments, and control characters, then mapped to **SHA-256 hex filenames** — user-controlled paths are never used on disk. Writes are atomic (temp file + `rename`, metadata sidecar published last); a symlinked `objects/` directory is rejected; reads verify etag/size integrity. Covered by 9 security tests.
-- **Mail (SEC-020).** CRLF/NUL header injection is rejected in subjects, display names, and headers. `renderTemplate` HTML-escapes interpolated values by default (XSS prevention). Retries are bounded and deterministic; a permanent failure throws `MailSendError` with attempt count and `cause` — **never a false success**. `TestTransport` is explicitly in-memory and never contacts SMTP/HTTP. Covered by 9 security tests.
+- **Mail (SEC-020).** CRLF/NUL header injection is rejected in subjects, display names, and headers. `renderTemplate` HTML-escapes interpolated values by default (XSS prevention). Retries are bounded and deterministic; a permanent failure throws `MailSendError` with attempt count and `cause` — **never a false success**. `TestTransport` is explicitly in-memory and never contacts SMTP/HTTP. Covered by 9 security tests. *(Stage 4 snapshot; Phase 8 adds real SMTP/HTTP adapters, attachments and a MIME serializer — see the Phase 8 review below.)*
 - **Testing (SEC-021).** Helpers delegate to the **real** `@sveltex/core` rather than reimplementing DI, so config validation (`SX_CONFIG_INVALID`), request-scope enforcement (`SX_PROVIDER_SCOPE_VIOLATION`), and lifecycle hook failures are surfaced, not bypassed. `withTestApplication` guarantees `stop()` even when the body throws; forgotten request scopes are disposed; fakes expose frozen defensive snapshots and reject use after `close()`. Covered by 12 security tests.
 
 ---
@@ -412,6 +412,55 @@ no substituted backend, **0 skipped**.
   server-side encryption configuration, replication, CDN or virus scanning; objects uploaded
   directly through a presigned PUT honestly expose the service ETag, not a SvelteX hash. These
   are recorded in the [Phase 7 report](../completion/phase-7-storage.md), not hidden.
+
+### Completion-plan Phase 8 — mail security review (SEC-072 – SEC-081)
+
+**Status: Secure (with documented limitations)**
+
+The dedicated Phase 8 cases are 10 additions to `packages/mail/tests/security/security.test.mjs`
+(the package now ships 19 security tests). The integration suite
+(`tests/integration/{smtp,http,auth}.test.mjs`, 24 cases) drives a **real** `smtp-server`
+(AUTH, STARTTLS, implicit TLS), a **real** `node:http` provider, `mailparser`, and real
+`@sveltex/auth` services. TLS material is a self-signed cert generated at runtime; no private key
+is committed. No fake provider, no substituted backend, **0 skipped**.
+
+- **Attachment filename / content boundary (SEC-072, SEC-073).** `validateAttachment` rejects
+  CRLF/NUL/control characters, path separators, colons, leading/traversal dots and overlong names;
+  content types must match a strict MIME grammar; `contentId`, `inline`, `encoding` and the
+  `content` shape are all checked. Base64 attachments are validated (padded, canonical) **before**
+  decoding. Every serializer (`validateMessage`, MIME, nodemailer mapping, HTTP payload) applies
+  the same check, so no adapter can bypass it.
+- **Resource-exhaustion boundary (SEC-074).** Attachment count (default 20), per-file size
+  (10 MiB) and aggregate size (25 MiB) are bounded and overridable; caps are enforced before any
+  I/O. `Mailer` freezes the message and byte-copies `Uint8Array` content, detaching it from the
+  caller's buffer.
+- **MIME/header-smuggling boundary (SEC-075, SEC-076, SEC-077).** `RESERVED_HEADERS` blocks
+  custom headers that shadow structural/recipient headers (`Bcc`, `From`, `To`, `Content-Type`,
+  `MIME-Version`, …). BCC is envelope-only across all serializers and never appears in the raw
+  MIME. `buildMimeMessage` emits CRLF-only 7-bit-safe output with RFC 2047 encoded-words and RFC
+  2231 percent-encoded filenames (no double encoding), and uses distinct boundaries for nested
+  multiparts even with a deterministic generator.
+- **SMTP boundary (SEC-078).** Config validation rejects credentials/whitespace in the host,
+  out-of-range ports and timeouts, malformed booleans/TLS options and unsafe auth strings.
+  `rejectUnauthorized` defaults to **true** (untrusted certs rejected on the real wire);
+  `disableFileAccess`/`disableUrlAccess` are always set so a message field can never make
+  nodemailer read a file or fetch a URL. Credentials never appear in error messages or `details`.
+- **HTTP / SSRF boundary (SEC-079).** Endpoints must be absolute `http(s)` without userinfo,
+  fragments or control characters; `allowedHosts` is an exact host allow-list. Hop-by-hop and
+  response-controlled headers are forbidden, request headers/values are strictly validated,
+  redirects are **manual** (an `Authorization` header can never follow a 3xx to another host),
+  timeouts use `AbortSignal.timeout`, and response bodies are bounded before JSON parsing. Provider
+  bodies and credentials are never reflected into errors.
+- **Auth-workflow boundary (SEC-080, SEC-081).** Reset/verification endpoints reject embedded
+  credentials, non-http(s) schemes and fragments; tokens go into links via `URLSearchParams`
+  (percent-encoded), so no value can inject an extra parameter or break out of an HTML attribute.
+  Default templates HTML-escape every interpolated value; contexts validate email, token and
+  expiry before any send. Verified end-to-end with real `PasswordResetService` /
+  `EmailVerificationService`, including single-use and purpose-scoped tokens.
+- **Not claimed.** No DKIM/SPF/DMARC signing, bounce handling or delivery tracking; the HTTP
+  adapter needs a provider that accepts the v1 envelope; SMTP `delivery` is server-reported, not a
+  final delivery confirmation; retries are in-process. Recorded in the
+  [Phase 8 report](../completion/phase-8-mail.md), not hidden.
 
 ## Recommendations
 

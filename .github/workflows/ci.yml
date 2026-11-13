@@ -81,3 +81,7 @@ jobs:
       - run: pnpm --filter @sveltex/jobs test:integration
       # Real MinIO (S3) integration tests for @sveltex/storage. Never skipped.
       - run: pnpm --filter @sveltex/storage test:integration
+      # Real SMTP/HTTP/auth integration tests for @sveltex/mail. Servers are
+      # started in-process on ephemeral loopback ports; a self-signed TLS cert is
+      # generated at runtime with openssl. No external mail service, never skipped.
+      - run: pnpm --filter @sveltex/mail test:integration
